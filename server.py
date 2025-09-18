@@ -5,6 +5,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
 import os
+import pytz
 
 app = FastAPI()
 
@@ -41,7 +42,7 @@ class Ride(Base):
     
     status = Column(String, nullable=False)
     pool_flag = Column(Integer, nullable=False, default=0)
-    request_time = Column(DateTime, nullable=False, default=datetime.utcnow)
+    request_time = Column(DateTime, nullable=False, default=lambda:datetime.now(pytz.timezone('Asia/Kolkata')))
 
 
 # Initialize DB connection safely
@@ -68,7 +69,7 @@ def create_ride(ride: RideRequest):
             destination_location=ride.destination_location,
             status='pending',
             pool_flag=0,
-            request_time=datetime.utcnow()
+            request_time=datetime.now(pytz.timezone('Asia/Kolkata'))
         )
         db.add(db_ride)
         db.commit()
