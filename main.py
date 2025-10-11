@@ -1,9 +1,9 @@
 from fastapi import FastAPI, WebSocket, Depends, WebSocketDisconnect, HTTPException
 from sqlalchemy.orm import Session
 import json
-from . import models, schemas
-from .database import engine, get_db, SessionLocal
-from .connection_manager import ConnectionManager
+from .server import models, schemas
+from .server.database import engine, get_db, SessionLocal
+from .server.connection_manager import ConnectionManager
 
 # This command creates all the tables if they don't exist
 models.Base.metadata.create_all(bind=engine)
