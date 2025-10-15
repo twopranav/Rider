@@ -4,6 +4,7 @@ import json
 from .server import models, schemas
 from .server.database import engine, get_db, SessionLocal
 from .server.connection_manager import ConnectionManager
+from datetime import datetime, timedelta
 
 # This command creates all the tables if they don't exist
 models.Base.metadata.create_all(bind=engine)
@@ -119,6 +120,37 @@ async def driver_websocket(websocket: WebSocket, driver_id: int, db: Session = D
         print(f"Driver {driver_id} disconnected and set to available.")
 
 # --- REST Endpoints ---
+
+@app.post("/rides/{ride_id}/accept_simulated/{driver_id}")
+async def accept_ride_simulated(ride_id: int, driver_id: int, db: Session = Depends(get_db)):
+    """Allows the simulation to assign a specific driver to a ride."""
+    ride = db.query(models.Ride).filter(models.Ride.id == ride_id, models.Ride.status == 'waiting').first()
+    driver = db.query(models.Driver).filter(models.Driver.id == driver_id, models.Driver.status == 'available').first()
+
+    if not ride or not driver:
+        raise HTTPException(status_code=404, detail="Ride or Driver not available for assignment.")
+
+    # Assign the ride and update statuses
+    ride.driver_id = driver.id
+    ride.status = 'assigned'
+    driver.status = 'busy'
+    
+    # Calculate and store the ride's estimated completion time
+    pickup_time_mins = calculate_time(driver.current_zone, ride.start_zone)
+    trip_time_mins = calculate_time(ride.start_zone, ride.drop_zone)
+    total_duration = timedelta(minutes=(pickup_time_mins + trip_time_mins))
+    ride.completion_time = datetime.utcnow() + total_duration
+    
+    db.commit()
+
+    # Notify the original rider via WebSocket (optional for sim, but good to have)
+    rider_notification = {
+        "type": "driver_assigned", "driver_name": driver.name, "arrival_time_minutes": pickup_time_mins
+    }
+    await manager.send_to_rider(ride.client_id, rider_notification)
+    
+    return {"message": f"Driver {driver_id} successfully assigned to ride {ride.id}"}
+
 @app.post("/clients/register", response_model=schemas.Client)
 def register_client(client: schemas.ClientCreate, db: Session = Depends(get_db)):
     db_client = models.Client(**client.dict())
