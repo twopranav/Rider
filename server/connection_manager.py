@@ -1,5 +1,5 @@
 from fastapi import WebSocket
-from typing import Dict, List
+from typing import Dict
 import json
 
 class ConnectionManager:
@@ -21,10 +21,20 @@ class ConnectionManager:
             del self.rider_connections[client_id]
 
     async def broadcast_to_drivers(self, message: dict):
-        for connection in self.driver_connections.values():
-            await connection.send_text(json.dumps(message))
-            
+        text = json.dumps(message)
+        for connection in list(self.driver_connections.values()):
+            try:
+                await connection.send_text(text)
+            except Exception:
+                # ignore send errors — connection cleanup will happen on disconnect
+                pass
+
     async def send_to_rider(self, rider_id: int, message: dict):
         if rider_id in self.rider_connections:
             websocket = self.rider_connections[rider_id]
+            await websocket.send_text(json.dumps(message))
+
+    async def send_to_driver(self, driver_id: int, message: dict):
+        if driver_id in self.driver_connections:
+            websocket = self.driver_connections[driver_id]
             await websocket.send_text(json.dumps(message))
