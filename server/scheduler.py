@@ -263,17 +263,25 @@ async def frequent_job():
 
 
 def start_scheduler():
-    scheduler = AsyncIOScheduler()
-    scheduler.add_job(lambda: asyncio.ensure_future(frequent_job()), 'interval', seconds=SWEEP_INTERVAL_SECONDS)
+    # 1. Create a fresh event loop
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    # 2. Pass that loop to the scheduler
+    scheduler = AsyncIOScheduler(event_loop=loop)
+
+    # 3. THE CRITICAL FIX:
+    # We pass 'frequent_job' directly (no 'lambda', no 'ensure_future')
+    scheduler.add_job(frequent_job, 'interval', seconds=SWEEP_INTERVAL_SECONDS)
+
     scheduler.start()
     logger.info("Booking scheduler started (runs every %s seconds)", SWEEP_INTERVAL_SECONDS)
+    
     try:
-        asyncio.get_event_loop().run_forever()
+        loop.run_forever()
     except (KeyboardInterrupt, SystemExit):
         logger.info("Shutting down scheduler...")
         scheduler.shutdown()
-
-
 # -----------------------
 # CLI entrypoint
 # -----------------------
