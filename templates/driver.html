@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Driver App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>#map { height: 350px; width: 100%; z-index: 0; }</style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+    <div class="max-w-md mx-auto p-4">
+        <div class="flex justify-between items-center mb-4">
+            <h1 class="text-xl font-bold text-yellow-400">🚖 Captain <span class="text-sm text-gray-400">#{{ id }}</span></h1>
+            <div class="flex items-center gap-2">
+                <button onclick="toggleHistory()" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded border border-gray-500">📜 History</button>
+                <div class="text-xs bg-green-600 px-2 py-1 rounded">Online</div>
+            </div>
+        </div>
+
+        <div id="main-view">
+            <div id="map" class="rounded-xl border border-gray-700 mb-4 shadow-lg"></div>
+
+            <div id="active-panel" class="hidden bg-gray-800 p-4 rounded-xl border-l-4 border-yellow-500 mb-4 shadow-lg">
+                <h2 class="font-bold text-lg mb-2">🚀 Trip in Progress</h2>
+                <div class="space-y-2">
+                    <button onclick="updateStatus('driver_arrived')" class="w-full bg-yellow-600 hover:bg-yellow-500 py-3 rounded-lg font-bold shadow text-black">📍 Arrived at Pickup</button>
+                    <button onclick="updateStatus('start_trip')" class="w-full bg-blue-600 hover:bg-blue-500 py-3 rounded-lg font-bold shadow">▶️ Start Trip</button>
+                    <button onclick="updateStatus('complete_ride')" class="w-full bg-green-600 hover:bg-green-500 py-3 rounded-lg font-bold shadow">✅ Complete & Collect</button>
+                </div>
+            </div>
+
+            <h3 class="text-xs text-gray-500 font-bold uppercase mb-2">Requests</h3>
+            <div id="feed" class="space-y-2 mb-6"><div id="empty-msg" class="text-center text-gray-600 text-sm">Scanning...</div></div>
+            
+            <div class="border-t border-gray-800 pt-4">
+                <h3 class="text-xs text-blue-400 font-bold uppercase mb-2">Pool Offers</h3>
+                <div id="pool-feed" class="space-y-2"></div>
+            </div>
+        </div>
+
+        <div id="history-view" class="hidden">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="font-bold text-lg">My Trips</h2>
+                <button onclick="toggleHistory()" class="text-sm text-blue-400">Back</button>
+            </div>
+            <div id="hist-list" class="space-y-2">Loading...</div>
+        </div>
+    </div>
+
+    <script>
+        const driverId = {{ id }};
+        const ws = new WebSocket(`ws://${window.location.host}/ws/driver/${driverId}`);
+        const map = L.map('map', {zoomControl:false}).setView([12.971, 77.594], 11);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
+        let routeLine = null;
+
+        const COORDS = { "Koramangala": [12.9352, 77.6245], "Indiranagar": [12.9719, 77.6412], "HSR Layout": [12.9121, 77.6446], "Electronic City": [12.8399, 77.6770], "Whitefield": [12.9698, 77.7500], "MG Road": [12.9716, 77.5946], "Jayanagar": [12.9308, 77.5838], "Marathahalli": [12.9591, 77.6974], "Hebbal": [13.0354, 77.5988], "Airport (KIAL)": [13.1986, 77.7066] };
+
+        function preview(from, to) {
+            if(routeLine) map.removeLayer(routeLine);
+            const p1=COORDS[from], p2=COORDS[to];
+            if(p1 && p2) { routeLine = L.polyline([p1, p2], {color:'#FBBF24', weight:5}).addTo(map); map.fitBounds(routeLine.getBounds(), {padding:[40,40]}); }
+        }
+
+        ws.onmessage = (e) => {
+            const data = JSON.parse(e.data);
+            if(data.type === 'new_ride') {
+                document.getElementById('empty-msg').style.display='none';
+                const card = document.createElement('div');
+                card.className = `bg-gray-800 p-3 rounded-lg border-l-4 ${data.is_vip?'border-yellow-500':'border-blue-500'} mb-2`;
+                card.onmouseenter = () => preview(data.from, data.to);
+                card.innerHTML = `<div class="flex justify-between font-bold"><span>#${data.ride_id}</span>${data.is_vip?'<span class="text-xs bg-yellow-500 text-black px-1 rounded font-bold">VIP</span>':''}</div><div class="text-sm text-gray-300">${data.from} ➡ ${data.to}</div><button onclick="accept(${data.ride_id})" class="mt-2 w-full bg-white text-black font-bold py-1 rounded">Accept</button>`;
+                document.getElementById('feed').prepend(card);
+            }
+            if(data.type === 'pool_accepted') {
+                document.getElementById('feed').innerHTML = '';
+                document.getElementById('pool-feed').innerHTML = '';
+                document.getElementById('active-panel').classList.remove('hidden');
+                alert("Pool Accepted! Start driving.");
+            }
+            if(data.type === 'pool_taken') checkPools();
+        }
+
+        function accept(id) {
+            ws.send(JSON.stringify({ "action": "accept_ride", "ride_id": id }));
+            document.getElementById('feed').innerHTML = '';
+            document.getElementById('active-panel').classList.remove('hidden');
+        }
+
+        // --- THE FIXED BUTTON FUNCTION ---
+        function updateStatus(action) {
+            // We just send the action. Server knows which rides are active for us.
+            ws.send(JSON.stringify({ "action": action }));
+            
+            if(action === 'complete_ride') {
+                alert("Trip Completed!");
+                location.reload();
+            } else {
+                alert("Status sent to Passengers!");
+            }
+        }
+
+        async function checkPools() {
+            const res = await fetch('/pooling/offers');
+            const data = await res.json();
+            const feed = document.getElementById('pool-feed');
+            feed.innerHTML = '';
+            data.forEach(p => {
+                feed.innerHTML += `<div class="bg-blue-900/40 border border-blue-500 p-3 rounded mb-2"><div class="flex justify-between font-bold text-blue-300 text-sm"><span>Pool #${p.id}</span><span>₹${p.value}</span></div><div class="text-xs text-gray-400">${p.from} ➡ ${p.to}</div><button onclick="acceptPool(${p.id})" class="mt-2 w-full bg-blue-600 text-white text-xs font-bold py-2 rounded">ACCEPT POOL</button></div>`;
+            });
+        }
+        function acceptPool(id) { ws.send(JSON.stringify({ "action": "accept_pooled", "pooled_id": id })); }
+        
+        async function toggleHistory() {
+            const main = document.getElementById('main-view');
+            const hist = document.getElementById('history-view');
+            if(hist.classList.contains('hidden')) {
+                main.classList.add('hidden');
+                hist.classList.remove('hidden');
+                const res = await fetch(`/rides/history/driver/${driverId}`);
+                const data = await res.json();
+                const list = document.getElementById('hist-list');
+                list.innerHTML = data.length ? data.map(h => `<div class="bg-gray-800 p-3 rounded border border-gray-600 text-sm"><div class="flex justify-between text-gray-400"><span>${h.date}</span><span class="text-green-400 font-bold">₹${h.price}</span></div><div class="mt-1">${h.from} ➡ ${h.to}</div></div>`).join('') : '<div class="text-gray-500 text-center">No trips yet</div>';
+            } else {
+                main.classList.remove('hidden');
+                hist.classList.add('hidden');
+            }
+        }
+        
+        setInterval(checkPools, 2000);
+    </script>
+</body>
+</html>

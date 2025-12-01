@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Namma Yatri - Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-900 text-white h-screen flex items-center justify-center">
+
+    <div class="bg-gray-800 p-8 rounded-2xl shadow-2xl w-96 border border-gray-700">
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-yellow-400 mb-2">🛺 Rider</h1>
+            <p class="text-gray-400">Bangalore's Smartest Mobility</p>
+        </div>
+
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-400 mb-1">Select Role</label>
+                <select id="role" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 focus:outline-none focus:border-yellow-400 text-white">
+                    <option value="rider">👤 Passenger (Rider)</option>
+                    <option value="driver">🚕 Captain (Driver)</option>
+                    <option value="admin">💻 Admin Dashboard</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-400 mb-1">User ID</label>
+                <input type="number" id="user_id" value="1" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 focus:outline-none focus:border-yellow-400 text-white" placeholder="Enter ID">
+            </div>
+
+            <button onclick="login()" class="w-full bg-yellow-500 hover:bg-yellow-600 text-black font-bold py-3 rounded-lg transition duration-200">
+                Login
+            </button>
+
+            <div class="text-center mt-4">
+                <a href="/register" class="text-sm text-yellow-400 hover:underline">New here? Create Account</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function login() {
+            const role = document.getElementById('role').value;
+            const id = document.getElementById('user_id').value;
+            if (role === 'admin') window.location.href = '/dashboard';
+            else if (role === 'rider') window.location.href = `/app/rider/${id}`;
+            else window.location.href = `/app/driver/${id}`;
+        }
+    </script>
+</body>
+</html>

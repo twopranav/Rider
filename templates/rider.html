@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Rider App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>#map { height: 300px; } .tab-active { border-bottom: 3px solid #F59E0B; color: #F59E0B; font-weight: bold; }</style>
+</head>
+<body class="bg-gray-100 pb-20">
+    <div class="bg-white p-4 shadow sticky top-0 z-50 flex justify-between items-center">
+        <h1 class="text-lg font-bold">🛺 Rider <span class="text-gray-400 text-xs">#{{ id }}</span></h1>
+        <div id="status-badge" class="text-xs font-bold text-green-600">● Online</div>
+    </div>
+    <div id="map"></div>
+
+    <div class="flex bg-white shadow-sm border-b">
+        <button onclick="switchTab('book')" id="tab-book" class="flex-1 py-4 text-sm tab-active">📍 Book</button>
+        <button onclick="switchTab('sub')" id="tab-sub" class="flex-1 py-4 text-sm">📅 Schedule</button>
+        <button onclick="switchTab('hist')" id="tab-hist" class="flex-1 py-4 text-sm">🕒 History</button>
+    </div>
+
+    <div id="view-book" class="p-4 space-y-4">
+        <div class="bg-white p-4 rounded-xl shadow-sm space-y-3">
+            <div class="flex gap-2">
+                <select id="start" onchange="updateRoute()" class="w-1/2 p-2 bg-gray-50 border rounded text-sm"></select>
+                <select id="drop" onchange="updateRoute()" class="w-1/2 p-2 bg-gray-50 border rounded text-sm"></select>
+            </div>
+        </div>
+        <button onclick="getEstimate()" class="w-full bg-gray-200 font-bold py-3 rounded-xl text-sm">Check Prices</button>
+        <div id="price-box" class="hidden grid grid-cols-2 gap-3">
+            <div class="bg-white p-3 rounded border text-center"><div class="text-xs">Solo</div><div id="cost-solo" class="font-bold">--</div><button onclick="requestRide('solo')" class="mt-2 bg-black text-white text-xs px-3 py-1 rounded">Book</button></div>
+            <div class="bg-green-50 p-3 rounded border border-green-200 text-center"><div class="text-xs text-green-700">Pool</div><div id="cost-pool" class="font-bold text-green-700">--</div><button id="btn-pool" onclick="requestRide('pool')" class="mt-2 bg-green-600 text-white text-xs px-3 py-1 rounded disabled:opacity-50">Book</button></div>
+        </div>
+        <div id="live-status" class="hidden bg-blue-50 border border-blue-200 p-4 rounded-xl mt-4"><p id="live-msg" class="text-sm text-blue-800">Connecting...</p></div>
+    </div>
+
+    <div id="view-sub" class="hidden p-4 space-y-4">
+        <div class="bg-white p-6 rounded-2xl shadow-lg space-y-4">
+            <h2 class="text-xl font-bold text-gray-800">Plan Commute</h2>
+            <div class="space-y-3">
+                <div><label class="text-[10px] font-bold text-gray-500 uppercase">Start Date</label><input type="date" id="sub-date" class="w-full p-2 border rounded"></div>
+                <div><label class="text-[10px] font-bold text-gray-500 uppercase">Time</label><input type="time" id="sub-time" class="w-full p-2 border rounded" value="09:00"></div>
+                <div class="text-sm font-bold text-gray-700 mb-1">Select Days</div>
+                <div class="flex flex-wrap gap-2 text-sm" id="day-selector"></div>
+                <div class="mt-3"><label class="text-[10px] font-bold text-gray-500 uppercase">Mode</label><select id="sub-mode" class="w-full p-2 border rounded"><option value="pool">Pool (Shared VIP)</option><option value="solo">Solo (Private VIP)</option></select></div>
+            </div>
+            <button onclick="buySubscription()" class="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-3 rounded-xl shadow-lg">Confirm Schedule</button>
+        </div>
+    </div>
+
+    <div id="view-hist" class="hidden p-4 space-y-3">
+        <h3 class="font-bold text-gray-700">Completed Trips</h3>
+        <div id="hist-list" class="space-y-2">Loading...</div>
+    </div>
+
+    <script>
+        const riderId = {{ id }};
+        const ws = new WebSocket(`ws://${window.location.host}/ws/rider/${riderId}`);
+        const LOCATIONS = {1:[12.935,77.624],2:[12.971,77.641],3:[12.912,77.644],4:[12.839,77.677],5:[12.969,77.750],10:[13.198,77.706]};
+        const map = L.map('map', {zoomControl:false}).setView([12.971, 77.594], 12);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(map);
+        let lg = L.layerGroup().addTo(map);
+
+        async function init() {
+            const res = await fetch('/config/locations');
+            const locs = await res.json();
+            const s=document.getElementById('start'), d=document.getElementById('drop');
+            for(const [k,v] of Object.entries(locs)) {
+                s.innerHTML += `<option value="${k}">${v}</option>`;
+                d.innerHTML += `<option value="${k}">${v}</option>`;
+            }
+            s.value="1"; d.value="5"; updateRoute();
+            document.getElementById('sub-date').valueAsDate = new Date();
+            
+            const days = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+            document.getElementById('day-selector').innerHTML = days.map(day => `<label class="flex items-center"><input type="checkbox" checked value="${day.toLowerCase()}" class="mr-1"> ${day}</label>`).join('');
+
+            const subRes = await fetch(`/clients/${riderId}/subscription_status`);
+            const subData = await subRes.json();
+            if(!subData.is_vip) document.getElementById('btn-pool').disabled = true;
+            
+            loadHist(); // Load history on start
+        }
+        init();
+
+        function switchTab(t) {
+            ['book','sub','hist'].forEach(k => {
+                document.getElementById('view-'+k).className = t===k?'p-4 space-y-4':'hidden';
+                document.getElementById('tab-'+k).className = t===k?'flex-1 py-4 text-sm tab-active':'flex-1 py-4 text-sm';
+            });
+            if(t === 'hist') loadHist();
+        }
+        function updateRoute() {
+            const s=document.getElementById('start').value, d=document.getElementById('drop').value;
+            lg.clearLayers();
+            if(LOCATIONS[s] && LOCATIONS[d]) {
+                L.marker(LOCATIONS[s]).addTo(lg); L.marker(LOCATIONS[d]).addTo(lg);
+                const l = L.polyline([LOCATIONS[s], LOCATIONS[d]], {color:'black', dashArray:'5,5'}).addTo(lg);
+                map.fitBounds(l.getBounds(), {padding:[50,50]});
+            }
+        }
+
+        async function loadHist() {
+            try {
+                const res = await fetch(`/rides/history/rider/${riderId}`);
+                const data = await res.json();
+                const list = document.getElementById('hist-list');
+                if(data.length === 0) { list.innerHTML = '<p class="text-xs text-gray-500">No trips yet.</p>'; return; }
+                list.innerHTML = data.map(h => `
+                    <div class="bg-white p-3 rounded shadow text-xs border-l-4 border-green-500">
+                        <div class="flex justify-between font-bold"><span>${h.date}</span><span>₹${h.price}</span></div>
+                        <div class="mt-1">${h.from} ➡ ${h.to}</div>
+                    </div>`).join('');
+            } catch(e) { console.log("Hist error", e); }
+        }
+
+        ws.onmessage = (e) => {
+            const data = JSON.parse(e.data);
+            if(data.type === 'price_estimate') {
+                document.getElementById('price-box').classList.remove('hidden');
+                document.getElementById('cost-solo').innerText = "₹" + data.solo;
+                document.getElementById('cost-pool').innerText = "₹" + data.pool;
+            } else if (['info', 'driver_assigned', 'status_update'].includes(data.type)) {
+                const box = document.getElementById('live-status');
+                const msg = document.getElementById('live-msg');
+                box.classList.remove('hidden');
+                if(data.type === 'driver_assigned') msg.innerHTML = `Driver Assigned! ${data.driver_name}`;
+                else if(data.type === 'status_update') msg.innerText = data.message;
+                else msg.innerText = data.message;
+            } else if (data.type === 'ride_completed') {
+                alert("🎉 Destination Reached!");
+                location.reload();
+            }
+        };
+
+        function getEstimate() {
+            const s=parseInt(document.getElementById('start').value), d=parseInt(document.getElementById('drop').value);
+            ws.send(JSON.stringify({"action":"get_price_estimate","start_zone":s,"drop_zone":d}));
+        }
+        function requestRide(type) {
+            const s=parseInt(document.getElementById('start').value), d=parseInt(document.getElementById('drop').value);
+            ws.send(JSON.stringify({"action":"request_ride","start_zone":s,"drop_zone":d,"ride_type":type}));
+        }
+        async function buySubscription() {
+            const s=parseInt(document.getElementById('start').value), d=parseInt(document.getElementById('drop').value);
+            const date=document.getElementById('sub-date').value, time=document.getElementById('sub-time').value+":00";
+            const mode = document.getElementById('sub-mode').value;
+            const checks = document.querySelectorAll('#day-selector input:checked');
+            const selectedDays = Array.from(checks).map(c => c.value);
+
+            await fetch('/bookings/', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
+                client_id:riderId, start_zone:s, drop_zone:d, days_of_week:selectedDays, time_of_day:time, start_date:date, monthly_price:3000, ride_mode:mode
+            })});
+            alert("✅ Commute Scheduled!");
+            location.reload();
+        }
+    </script>
+</body>
+</html>

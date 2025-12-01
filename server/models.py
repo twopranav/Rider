@@ -47,16 +47,21 @@ class Ride(Base):
     status = Column(Enum(RideStatus), default=RideStatus.waiting)
     requested_at = Column(DateTime(timezone=True), server_default=func.now())
 
+# In server/models.py
+
 class Booking(Base):
     __tablename__ = "bookings"
     id = Column(Integer, primary_key=True, index=True)
     client_id = Column(Integer, ForeignKey("clients.id"), nullable=False)
     start_zone = Column(Integer, nullable=False)
     drop_zone = Column(Integer, nullable=False)
-    days_of_week = Column(String(50), nullable=False)  # "mon,tue,wed"
+    days_of_week = Column(String(50), nullable=False)
     time_of_day = Column(Time, nullable=False)
     start_date = Column(Date, nullable=False)
-    end_date = Column(Date, nullable=True)
+    
+    # NEW: Store if this subscription is for Pooling or Solo VIP
+    ride_mode = Column(String(20), default="solo")  # "pool" or "solo"
+    
     monthly_price = Column(Integer, nullable=False)
     status = Column(Enum(BookingStatus), default=BookingStatus.active)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

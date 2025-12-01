@@ -1,26 +1,58 @@
 from fastapi import FastAPI, WebSocket, Depends, WebSocketDisconnect, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from fastapi.requests import Request
 from sqlalchemy.orm import Session
 import json
 from datetime import datetime
 from typing import List
+
 from server.database import engine, get_db, SessionLocal
 from server import models, schemas
 from server.connection_manager import ConnectionManager
 
-# Create DB tables
 models.Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="Zoned Ride-Hailing System")
+app = FastAPI(title="Namma Yatri Clone")
+
+app.add_middleware(
+    CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"]
+)
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory="templates")
 manager = ConnectionManager()
 
+ZONE_MAP = {
+    1: "Koramangala", 2: "Indiranagar", 3: "HSR Layout", 4: "Electronic City",
+    5: "Whitefield", 6: "MG Road", 7: "Jayanagar", 8: "Marathahalli",
+    9: "Hebbal", 10: "Airport (KIAL)"
+}
+POOL_DISCOUNT = 0.6
+BASE_RATE = 15.0
 
-def calculate_time(zone1: int, zone2: int) -> int:
-    return abs(zone1 - zone2) * 5
+def get_location_name(zone_id: int):
+    return ZONE_MAP.get(zone_id, f"Zone {zone_id}")
 
+def calculate_price(start: int, drop: int, is_pool: bool = False) -> int:
+    dist = abs(start - drop) or 1
+    price = dist * BASE_RATE * 10
+    if is_pool: price *= POOL_DISCOUNT
+    return int(price)
 
-# -----------------------
-# WebSocket: Rider Socket (With VIP Upgrade)
-# -----------------------
+@app.get("/")
+def show_login(request: Request): return templates.TemplateResponse("login.html", {"request": request})
+@app.get("/register")
+def show_reg(request: Request): return templates.TemplateResponse("register.html", {"request": request})
+@app.get("/dashboard")
+def show_admin(request: Request): return templates.TemplateResponse("admin.html", {"request": request})
+@app.get("/app/rider/{client_id}")
+def show_rider(request: Request, client_id: int): return templates.TemplateResponse("rider.html", {"request": request, "id": client_id})
+@app.get("/app/driver/{driver_id}")
+def show_driver(request: Request, driver_id: int): return templates.TemplateResponse("driver.html", {"request": request, "id": driver_id})
+
+# --- WEBSOCKETS ---
 @app.websocket("/ws/rider/{rider_id}")
 async def rider_websocket(websocket: WebSocket, rider_id: int):
     await manager.connect(websocket, "rider", rider_id)
@@ -29,244 +61,196 @@ async def rider_websocket(websocket: WebSocket, rider_id: int):
             data = await websocket.receive_text()
             payload = json.loads(data)
 
-            if payload.get("action") == "request_ride":
+            if payload.get("action") == "get_price_estimate":
+                s = payload["start_zone"]; d = payload["drop_zone"]
+                await manager.send_to_rider(rider_id, {
+                    "type": "price_estimate", "solo": calculate_price(s,d,False), "pool": calculate_price(s,d,True)
+                })
+
+            elif payload.get("action") == "request_ride":
                 db = SessionLocal()
                 try:
-                    requested_start = payload["start_zone"]
-                    requested_drop = payload["drop_zone"]
-                    
-                    final_priority = 0 
-                    
-                    # CHECK SUBSCRIPTION
-                    subscription = db.query(models.Booking).filter(
-                        models.Booking.client_id == rider_id,
-                        models.Booking.start_zone == requested_start,
-                        models.Booking.drop_zone == requested_drop,
-                        models.Booking.status == models.BookingStatus.active
+                    s = payload["start_zone"]; d = payload["drop_zone"]; r_type = payload.get("ride_type", "solo")
+                    final_priority = 0
+                    sub = db.query(models.Booking).filter(
+                        models.Booking.client_id == rider_id, models.Booking.status == models.BookingStatus.active
                     ).first()
 
-                    if subscription:
-                        final_priority = 1
-                        await manager.send_to_rider(rider_id, {"type": "info", "message": "Subscription detected! Upgrading you to Priority Status."})
+                    if r_type == "pool" and not sub:
+                        await manager.send_to_rider(rider_id, {"type": "error", "message": "🔒 Pool is VIP only!"})
+                        continue
+                    if sub: final_priority = 1
 
-                    # CREATE RIDE
-                    ride = models.Ride(
-                        client_id=rider_id,
-                        start_zone=requested_start,
-                        drop_zone=requested_drop,
-                        is_priority=final_priority,
-                        status=models.RideStatus.waiting
-                    )
-                    db.add(ride)
-                    db.commit()
-                    db.refresh(ride)
+                    ride = models.Ride(client_id=rider_id, start_zone=s, drop_zone=d, is_priority=final_priority, status=models.RideStatus.waiting)
+                    db.add(ride); db.commit(); db.refresh(ride)
 
-                    notification = {
-                        "type": "new_ride",
-                        "ride_id": ride.id,
-                        "start_zone": ride.start_zone,
-                        "drop_zone": ride.drop_zone,
-                        "is_priority": bool(ride.is_priority)
+                    notif = {
+                        "type": "new_ride", "ride_id": ride.id, "from": get_location_name(s), "to": get_location_name(d),
+                        "is_vip": bool(ride.is_priority), "ride_type": r_type
                     }
-                    await manager.broadcast_to_drivers(notification)
-
-                    msg_text = "Priority Ride Requested." if final_priority else "Ride requested."
-                    await manager.send_to_rider(rider_id, {"type": "info", "message": f"{msg_text} Searching for drivers..."})
+                    await manager.broadcast_to_drivers(notif)
+                    await manager.send_to_rider(rider_id, {"type": "info", "message": "Searching..."})
                 finally:
                     db.close()
-
     except WebSocketDisconnect:
         manager.disconnect("rider", rider_id)
-        print(f"Rider {rider_id} disconnected.")
 
-
-# -----------------------
-# WebSocket: Driver Socket
-# -----------------------
 @app.websocket("/ws/driver/{driver_id}")
-async def driver_websocket(websocket: WebSocket, driver_id: int, db: Session = Depends(get_db)):
+async def driver_websocket(websocket: WebSocket, driver_id: int):
     await manager.connect(websocket, "driver", driver_id)
     try:
         while True:
             data = await websocket.receive_text()
             payload = json.loads(data)
-
-            if payload.get("action") == "accept_ride":
-                ride_id = payload["ride_id"]
-                local_db = SessionLocal()
-                try:
-                    ride_to_accept = local_db.query(models.Ride).filter(
-                        models.Ride.id == ride_id,
-                        models.Ride.status == models.RideStatus.waiting
-                    ).first()
-                    driver = local_db.query(models.Driver).filter(models.Driver.id == driver_id).first()
-
-                    if not ride_to_accept or not driver:
-                        continue
-                    
-                    # Logic to enforce priority could go here, but keeping it simple for now
-                    ride_to_accept.driver_id = driver_id
-                    ride_to_accept.status = models.RideStatus.assigned
-                    driver.status = models.DriverStatus.busy
-                    local_db.commit()
-
-                    time_to_arrive = calculate_time(driver.current_zone, ride_to_accept.start_zone)
-                    await manager.send_to_rider(ride_to_accept.client_id, {
-                        "type": "driver_assigned",
-                        "driver_name": driver.name,
-                        "arrival_time_minutes": time_to_arrive
-                    })
-                    await manager.broadcast_to_drivers({
-                        "type": "ride_taken",
-                        "ride_id": ride_to_accept.id,
-                        "accepted_by_driver_id": driver_id
-                    })
-
-                finally:
-                    local_db.close()
-
-            elif payload.get("action") == "accept_pooled":
-                # Simplified Pooled Logic
-                pooled_id = payload.get("pooled_id")
-                local_db = SessionLocal()
-                try:
-                    pooled = local_db.query(models.PooledRide).filter(models.PooledRide.id == pooled_id).first()
-                    driver = local_db.query(models.Driver).filter(models.Driver.id == driver_id).first()
-                    
-                    if pooled and driver:
-                        pooled.driver_id = driver_id
-                        pooled.status = models.RideStatus.assigned
+            action = payload.get("action")
+            db = SessionLocal()
+            try:
+                # 1. ACCEPT NORMAL RIDE
+                if action == "accept_ride":
+                    ride = db.query(models.Ride).filter(models.Ride.id == payload["ride_id"]).first()
+                    driver = db.query(models.Driver).filter(models.Driver.id == driver_id).first()
+                    if ride:
+                        ride.driver_id = driver_id; ride.status = models.RideStatus.assigned
                         driver.status = models.DriverStatus.busy
-                        local_db.commit()
-                        
-                        client_ids = json.loads(pooled.client_ids)
-                        for cid in client_ids:
-                            await manager.send_to_rider(cid, {"type": "driver_assigned", "driver_name": driver.name, "arrival_time_minutes": 5})
-                        
-                        await manager.broadcast_to_drivers({"type": "info", "message": f"Driver {driver_id} accepted pooled ride {pooled.id}"})
-                finally:
-                    local_db.close()
+                        db.commit()
+                        await manager.send_to_rider(ride.client_id, {
+                            "type": "driver_assigned", "driver_name": driver.name, "vehicle": driver.vehicle_number, "arrival": 3
+                        })
+                        await manager.broadcast_to_drivers({"type": "queue_update", "action": "remove", "ride_id": ride.id})
 
-            elif payload.get("action") == "complete_ride":
-                ride_id = payload["ride_id"]
-                local_db = SessionLocal()
-                try:
-                    ride = local_db.query(models.Ride).filter(models.Ride.id == ride_id).first()
-                    driver = local_db.query(models.Driver).filter(models.Driver.id == driver_id).first()
-                    if ride and driver:
-                        ride.status = models.RideStatus.completed
-                        driver.status = models.DriverStatus.available
-                        local_db.commit()
-                        await manager.send_to_rider(ride.client_id, {"type": "ride_completed", "message": "Ride finished."})
-                finally:
-                    local_db.close()
+                # 2. DRIVER UPDATES (BULLETPROOF FIX)
+                elif action in ["driver_arrived", "start_trip", "complete_ride"]:
+                    # FIX: IGNORE frontend ride_id. Find ALL rides assigned to this driver.
+                    active_rides = db.query(models.Ride).filter(
+                        models.Ride.driver_id == driver_id,
+                        models.Ride.status == models.RideStatus.assigned
+                    ).all()
 
+                    if not active_rides:
+                        # Fallback: Maybe it's already done?
+                        await manager.send_to_driver(driver_id, {"type": "info", "message": "No active passengers found."})
+                    
+                    for r in active_rides:
+                        if action == "complete_ride":
+                            r.status = models.RideStatus.completed
+                            await manager.send_to_rider(r.client_id, {"type": "ride_completed"})
+                        
+                        elif action == "driver_arrived":
+                            await manager.send_to_rider(r.client_id, {
+                                "type": "status_update", "status": "arrived", "message": "🚖 Driver Arrived at Pickup!"
+                            })
+                        
+                        elif action == "start_trip":
+                            await manager.send_to_rider(r.client_id, {
+                                "type": "status_update", "status": "in_progress", "message": "🚀 Trip Started! Heading to Drop."
+                            })
+                    
+                    if action == "complete_ride":
+                        db.query(models.Driver).filter(models.Driver.id == driver_id).update({"status": models.DriverStatus.available})
+                        
+                    db.commit()
+
+                # 3. ACCEPT POOL
+                elif action == "accept_pooled":
+                    pool_id = payload["pooled_id"]
+                    offer = db.query(models.PoolOffer).filter(models.PoolOffer.id == pool_id).first()
+                    if offer and offer.status == models.PoolOfferStatus.open:
+                        offer.status = models.PoolOfferStatus.filled
+                        driver = db.query(models.Driver).filter(models.Driver.id == driver_id).first()
+                        driver.status = models.DriverStatus.busy
+                        
+                        booking_ids = json.loads(offer.booking_ride_ids)
+                        clients = []
+
+                        for bid in booking_ids:
+                            br = db.query(models.BookingRide).filter(models.BookingRide.id == bid).first()
+                            if br:
+                                booking = db.query(models.Booking).filter(models.Booking.id == br.booking_id).first()
+                                if booking:
+                                    # Create actual ride
+                                    new_ride = models.Ride(
+                                        client_id=booking.client_id, 
+                                        driver_id=driver_id, 
+                                        booking_id=booking.id, 
+                                        start_zone=booking.start_zone, 
+                                        drop_zone=booking.drop_zone, 
+                                        is_priority=1, 
+                                        status=models.RideStatus.assigned
+                                    )
+                                    db.add(new_ride); db.flush()
+                                    br.status = models.RideStatus.assigned
+                                    br.ride_id = new_ride.id
+                                    clients.append(booking.client_id)
+                        db.commit()
+
+                        # Just tell driver it succeeded. We don't need a specific ride ID anymore.
+                        await manager.send_to_driver(driver_id, {"type": "pool_accepted"})
+                        
+                        await manager.broadcast_to_drivers({"type": "pool_taken", "pool_id": pool_id})
+                        for cid in clients:
+                            await manager.send_to_rider(cid, {
+                                "type": "driver_assigned", "driver_name": driver.name, "vehicle": driver.vehicle_number, "arrival": 5, "is_pool": True
+                            })
+            finally:
+                db.close()
     except WebSocketDisconnect:
         manager.disconnect("driver", driver_id)
 
+# --- APIs ---
+@app.get("/config/locations")
+def get_locs(): return ZONE_MAP
 
-# -----------------------
-# REST: Registration APIs
-# -----------------------
-@app.post("/clients/register", response_model=schemas.Client)
-def register_client(client: schemas.ClientCreate, db: Session = Depends(get_db)):
-    db_client = models.Client(**client.dict())
-    db.add(db_client)
-    db.commit()
-    db.refresh(db_client)
-    return db_client
-
-
-@app.post("/drivers/register", response_model=schemas.Driver)
-def register_driver(driver: schemas.DriverCreate, db: Session = Depends(get_db)):
-    db_driver = models.Driver(**driver.dict())
-    db.add(db_driver)
-    db.commit()
-    db.refresh(db_driver)
-    return db_driver
-
-
-# -----------------------
-# REST: Unified Queue (The Proof)
-# -----------------------
 @app.get("/rides/queue")
-def get_full_queue(db: Session = Depends(get_db)):
-    all_waiting = db.query(models.Ride).filter(
-        models.Ride.status == models.RideStatus.waiting
-    ).order_by(
-        models.Ride.is_priority.desc(),
-        models.Ride.requested_at.asc()
-    ).all()
-
-    unified_queue = []
-    for index, ride in enumerate(all_waiting):
-        data = {
-            "queue_position": index + 1,
-            "client_id": ride.client_id,
-            "is_vip": bool(ride.is_priority),
-            "ride_id": ride.id,
-            "route": f"{ride.start_zone} -> {ride.drop_zone}",
-            "requested_at": ride.requested_at.isoformat()
-        }
-        unified_queue.append(data)
-
-    return {
-        "unified_queue": unified_queue,
-        "total_waiting": len(unified_queue)
-    }
-
-
-# -----------------------
-# REST: Booking endpoints (THIS WAS MISSING!)
-# -----------------------
-@app.post("/bookings/", response_model=schemas.BookingOut)
-def create_booking(booking_in: schemas.BookingCreate, db: Session = Depends(get_db)):
-    days_str = ",".join([d.lower() for d in booking_in.days_of_week])
-    booking = models.Booking(
-        client_id=booking_in.client_id,
-        start_zone=booking_in.start_zone,
-        drop_zone=booking_in.drop_zone,
-        days_of_week=days_str,
-        time_of_day=booking_in.time_of_day,
-        start_date=booking_in.start_date,
-        end_date=booking_in.end_date,
-        monthly_price=booking_in.monthly_price,
-        status=models.BookingStatus.active
-    )
-    db.add(booking)
-    db.commit()
-    db.refresh(booking)
-    return booking
-
-
-@app.get("/bookings/{client_id}", response_model=list[schemas.BookingOut])
-def get_bookings_for_client(client_id: int, db: Session = Depends(get_db)):
-    bookings = db.query(models.Booking).filter(models.Booking.client_id == client_id).all()
-    return bookings
-
-@app.get("/bookings/{booking_id}/upcoming", response_model=list[schemas.BookingRideOut])
-def upcoming_booking_rides(booking_id: int, db: Session = Depends(get_db)):
-    items = db.query(models.BookingRide).filter(models.BookingRide.booking_id == booking_id).order_by(models.BookingRide.scheduled_for.asc()).all()
-    return items
-
-
-# -----------------------
-# REST: Pooling endpoints
-# -----------------------
-@app.get("/pooling/offers", response_model=list[schemas.PoolOfferOut])
-def list_pool_offers(db: Session = Depends(get_db)):
-    offers = db.query(models.PoolOffer).filter(models.PoolOffer.status == models.PoolOfferStatus.open).order_by(models.PoolOffer.scheduled_for.asc()).all()
-    return offers
-
-@app.post("/pooling/{offer_id}/accept")
-def accept_pool_offer(offer_id: int, accept_in: schemas.PoolAcceptIn, db: Session = Depends(get_db)):
-    # ... Simplified Pooling Logic for brevity since we focused on Queue Jumping ...
-    # (If you need full pooling logic back here, I can provide it, 
-    # but for the Queue Demo, this is sufficient to prevent errors)
-    offer = db.query(models.PoolOffer).filter(models.PoolOffer.id == offer_id).first()
-    if not offer:
-        raise HTTPException(status_code=404, detail="Pool offer not found")
+def get_q(db: Session=Depends(get_db)):
+    waiting = db.query(models.Ride).filter(models.Ride.status == models.RideStatus.waiting).all()
+    drivers = db.query(models.Driver).all()
+    active = db.query(models.Ride).filter(models.Ride.status == models.RideStatus.assigned).all()
     
-    # Check if we have enough participants (Logic from before)
-    # ...
-    return {"detail": "Accepted (Logic simplified for Queue Demo)"}
+    q_data = [{"queue_position": i+1, "client_id": r.client_id, "from": get_location_name(r.start_zone), "to": get_location_name(r.drop_zone), "vip": bool(r.is_priority)} for i,r in enumerate(waiting)]
+    d_data = [{"id": d.id, "name": d.name, "status": d.status, "location": get_location_name(d.current_zone)} for d in drivers]
+    a_data = [{"driver": r.driver_id, "client": r.client_id, "from": get_location_name(r.start_zone), "to": get_location_name(r.drop_zone)} for r in active]
+    
+    return {"queue": q_data, "drivers": d_data, "active": a_data}
+
+@app.get("/pooling/offers")
+def list_pools(db: Session=Depends(get_db)):
+    offers = db.query(models.PoolOffer).filter(models.PoolOffer.status == models.PoolOfferStatus.open).all()
+    results = []
+    for o in offers:
+        ride_ids = json.loads(o.booking_ride_ids)
+        est_val = calculate_price(o.start_zone, o.drop_zone, True) * len(ride_ids)
+        results.append({
+            "id": o.id, "from": get_location_name(o.start_zone), "to": get_location_name(o.drop_zone), "seats_filled": len(ride_ids), "value": est_val
+        })
+    return results
+
+@app.get("/rides/history/{role}/{user_id}")
+def get_hist(role: str, user_id: int, db: Session=Depends(get_db)):
+    query = db.query(models.Ride).filter(models.Ride.status == models.RideStatus.completed)
+    if role == "rider": query = query.filter(models.Ride.client_id == user_id)
+    elif role == "driver": query = query.filter(models.Ride.driver_id == user_id)
+    h = query.order_by(models.Ride.requested_at.desc()).limit(10).all()
+    return [{"id":r.id, "date":r.requested_at.strftime("%Y-%m-%d %H:%M"), "from":get_location_name(r.start_zone), "to":get_location_name(r.drop_zone), "price":calculate_price(r.start_zone, r.drop_zone)} for r in h]
+
+@app.get("/bookings/{client_id}/upcoming")
+def get_upcoming(client_id: int, db: Session=Depends(get_db)):
+    bookings = db.query(models.Booking).filter(models.Booking.client_id == client_id, models.Booking.status == models.BookingStatus.active).all()
+    return [{"id": b.id, "route": f"{get_location_name(b.start_zone)} ➡ {get_location_name(b.drop_zone)}", "time": b.time_of_day.strftime("%H:%M"), "days": b.days_of_week} for b in bookings]
+
+@app.get("/clients/{cid}/subscription_status")
+def check_sub(cid: int, db: Session=Depends(get_db)):
+    sub = db.query(models.Booking).filter(models.Booking.client_id == cid, models.Booking.status == models.BookingStatus.active).first()
+    return {"is_vip": sub is not None}
+
+@app.post("/pooling/{oid}/accept")
+def acc_pool(oid: int, db: Session=Depends(get_db)): return {"detail": "Joined"}
+@app.post("/clients/register", response_model=schemas.Client)
+def rc(c: schemas.ClientCreate, db: Session=Depends(get_db)): x=models.Client(**c.dict()); db.add(x); db.commit(); db.refresh(x); return x
+@app.post("/drivers/register", response_model=schemas.Driver)
+def rd(d: schemas.DriverCreate, db: Session=Depends(get_db)): x=models.Driver(**d.dict()); db.add(x); db.commit(); db.refresh(x); return x
+@app.post("/bookings/", response_model=schemas.BookingOut)
+def rb(b: schemas.BookingCreate, db: Session=Depends(get_db)):
+    days=",".join(b.days_of_week)
+    mode=getattr(b, 'ride_mode', 'pool') 
+    x=models.Booking(client_id=b.client_id, start_zone=b.start_zone, drop_zone=b.drop_zone, days_of_week=days, time_of_day=b.time_of_day, start_date=b.start_date, ride_mode=mode, monthly_price=b.monthly_price)
+    db.add(x); db.commit(); db.refresh(x); return x

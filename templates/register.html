@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Register - Namma Yatri</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <style>
+        .hidden { display: none; }
+        .back-link { display: block; text-align: center; margin-top: 15px; color: #007bff; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="container" style="max-width: 400px; margin-top: 50px;">
+        <h1>📝 Register</h1>
+        <p style="text-align:center; color:#666;">Create a new profile</p>
+
+        <label>I am a:</label>
+        <select id="role" onchange="toggleFields()">
+            <option value="client">Rider (Passenger)</option>
+            <option value="driver">Driver (Captain)</option>
+        </select>
+
+        <label>Name:</label>
+        <input type="text" id="name" placeholder="e.g. Rahul">
+
+        <label>Port (Simulated Phone #):</label>
+        <input type="number" id="port" placeholder="e.g. 9001">
+
+        <div id="driverFields" class="hidden">
+            <label>Vehicle Number:</label>
+            <input type="text" id="vehicle" placeholder="KA-01-AB-1234">
+            
+            <label>Starting Zone (1-10):</label>
+            <input type="number" id="zone" placeholder="e.g. 5" value="1">
+        </div>
+
+        <button class="btn" onclick="registerUser()">Create Account</button>
+        <a href="/" class="back-link">← Back to Login</a>
+    </div>
+
+    <script>
+        function toggleFields() {
+            const role = document.getElementById('role').value;
+            const driverFields = document.getElementById('driverFields');
+            if (role === 'driver') {
+                driverFields.classList.remove('hidden');
+            } else {
+                driverFields.classList.add('hidden');
+            }
+        }
+
+        async function registerUser() {
+            const role = document.getElementById('role').value;
+            const name = document.getElementById('name').value;
+            const port = document.getElementById('port').value;
+
+            let url = "";
+            let body = {};
+
+            if (role === 'client') {
+                url = "/clients/register";
+                body = { "name": name, "port": parseInt(port) };
+            } else {
+                url = "/drivers/register";
+                const vehicle = document.getElementById('vehicle').value;
+                const zone = document.getElementById('zone').value;
+                body = { 
+                    "name": name, 
+                    "vehicle_number": vehicle, 
+                    "port": parseInt(port), 
+                    "current_zone": parseInt(zone)
+                };
+            }
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    alert(`✅ Success! Your User ID is: ${data.id}\n\nPlease remember this ID to login.`);
+                    window.location.href = "/"; // Go back to login
+                } else {
+                    const err = await response.json();
+                    alert("Error: " + JSON.stringify(err));
+                }
+            } catch (e) {
+                alert("Connection failed: " + e);
+            }
+        }
+    </script>
+</body>
+</html>

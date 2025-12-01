@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .zone-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+        .zone-box { height: 80px; display: flex; flex-direction: column; justify-content: center; align-items: center; border-radius: 8px; transition: all 0.3s; }
+        .zone-active { background: #fee2e2; border: 2px solid #ef4444; }
+        .zone-idle { background: #f3f4f6; border: 2px solid transparent; }
+    </style>
+</head>
+<body class="bg-gray-50 p-8">
+    <div class="max-w-6xl mx-auto space-y-8">
+        <div class="flex justify-between items-center">
+            <h1 class="text-3xl font-bold text-gray-800">🚔 Admin Command Center</h1>
+            <div class="space-x-2">
+                <button onclick="showSection('live')" class="bg-blue-600 text-white px-4 py-2 rounded">Live View</button>
+                <button onclick="showSection('history')" class="bg-gray-600 text-white px-4 py-2 rounded">History</button>
+            </div>
+        </div>
+
+        <div id="section-live" class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div class="lg:col-span-1 space-y-6">
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-white p-4 rounded-xl shadow border-l-4 border-blue-500">
+                        <div class="text-gray-500 text-xs uppercase font-bold">Waiting</div>
+                        <div class="text-3xl font-bold" id="stat-waiting">0</div>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl shadow border-l-4 border-green-500">
+                        <div class="text-gray-500 text-xs uppercase font-bold">Active</div>
+                        <div class="text-3xl font-bold" id="stat-active">0</div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl shadow overflow-hidden">
+                    <div class="bg-gray-800 text-white p-3 font-bold text-sm">🛑 Waiting Queue</div>
+                    <div id="queue-list" class="divide-y divide-gray-100 max-h-60 overflow-y-auto"></div>
+                </div>
+            </div>
+            <div class="lg:col-span-2 space-y-6">
+                <div class="bg-white p-6 rounded-xl shadow">
+                    <h3 class="font-bold text-gray-700 mb-4 text-sm uppercase">Live Heatmap</h3>
+                    <div class="zone-grid" id="map-grid"></div>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow">
+                    <h3 class="font-bold text-green-700 mb-4 text-sm uppercase">🚀 Ongoing Trips</h3>
+                    <table class="w-full text-sm text-left"><thead class="bg-green-50 text-green-800"><tr><th class="p-2">Driver</th><th class="p-2">Client</th><th class="p-2">Route</th><th class="p-2">Status</th></tr></thead><tbody id="active-list"></tbody></table>
+                </div>
+            </div>
+        </div>
+
+        <div id="section-history" class="hidden bg-white p-6 rounded-xl shadow">
+            <h3 class="font-bold text-lg mb-4">Completed Rides</h3>
+            <table class="w-full text-left text-sm"><thead class="bg-gray-100 border-b"><tr><th class="p-3">ID</th><th class="p-3">Date</th><th class="p-3">Route</th><th class="p-3">Fare</th></tr></thead><tbody id="hist-table"></tbody></table>
+        </div>
+    </div>
+
+    <script>
+        const ZONES = { 1:"Koramangala", 2:"Indiranagar", 3:"HSR Layout", 4:"Electronic City", 5:"Whitefield", 6:"MG Road", 7:"Jayanagar", 8:"Marathahalli", 9:"Hebbal", 10:"Airport (KIAL)" };
+
+        function showSection(id) {
+            document.getElementById('section-live').classList.add('hidden');
+            document.getElementById('section-history').classList.add('hidden');
+            document.getElementById('section-'+id).classList.remove('hidden');
+            if(id==='history') loadHistory();
+        }
+
+        async function loadHistory() {
+            const res = await fetch('/rides/history/admin/0');
+            const data = await res.json();
+            document.getElementById('hist-table').innerHTML = data.map(r => `<tr class="border-b"><td class="p-3">#${r.id}</td><td class="p-3 text-gray-500">${r.date}</td><td class="p-3">${r.from} ➡ ${r.to}</td><td class="p-3 font-bold text-green-600">₹${r.price}</td></tr>`).join('');
+        }
+
+        async function refresh() {
+            if(document.getElementById('section-live').classList.contains('hidden')) return;
+            const res = await fetch('/rides/queue');
+            const data = await res.json();
+            document.getElementById('stat-waiting').innerText = data.queue.length;
+            document.getElementById('stat-active').innerText = data.active.length;
+
+            document.getElementById('queue-list').innerHTML = data.queue.map(q => `<div class="p-3 hover:bg-gray-50 flex justify-between"><div><span class="font-bold text-sm">#${q.queue_position}</span> <span class="text-xs">Client ${q.client_id}</span></div><div class="text-right text-xs font-bold">${q.from} → ${q.to} ${q.vip?'<span class="text-yellow-600">VIP</span>':''}</div></div>`).join('');
+            
+            document.getElementById('active-list').innerHTML = data.active.map(a => `<tr class="border-b"><td class="p-2 font-bold">${a.driver}</td><td class="p-2">Client ${a.client}</td><td class="p-2">${a.from} → ${a.to}</td><td class="p-2"><span class="bg-green-100 text-green-800 px-2 py-1 rounded text-xs">On Trip</span></td></tr>`).join('');
+
+            document.getElementById('map-grid').innerHTML = '';
+            for(let i=1; i<=10; i++) {
+                const busy = data.queue.some(r=>r.from===ZONES[i]||r.to===ZONES[i]) || data.active.some(r=>r.from===ZONES[i]||r.to===ZONES[i]);
+                document.getElementById('map-grid').innerHTML += `<div class="zone-box ${busy?'zone-active':'zone-idle'}"><div class="font-bold text-[10px] text-gray-700">${ZONES[i]}</div>${busy?'<div class="text-red-500 text-xs font-bold">●</div>':''}</div>`;
+            }
+        }
+        setInterval(refresh, 2000); refresh();
+    </script>
+</body>
+</html>
