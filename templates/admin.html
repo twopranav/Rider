@@ -4,92 +4,283 @@
     <meta charset="UTF-8">
     <title>Admin Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        .zone-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
-        .zone-box { height: 80px; display: flex; flex-direction: column; justify-content: center; align-items: center; border-radius: 8px; transition: all 0.3s; }
-        .zone-active { background: #fee2e2; border: 2px solid #ef4444; }
-        .zone-idle { background: #f3f4f6; border: 2px solid transparent; }
+        /* Responsive Grid for 100+ Zones */
+        .zone-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); 
+            gap: 8px; 
+            max-height: 600px; 
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+        .zone-box { 
+            height: 60px; 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: center; 
+            align-items: center; 
+            border-radius: 6px; 
+            transition: all 0.2s; 
+            font-size: 10px;
+            text-align: center;
+            border: 1px solid #e5e7eb;
+            background: white;
+        }
+        /* Status Colors */
+        .zone-busy { background: #fee2e2; border-color: #ef4444; color: #991b1b; font-weight: bold; }
+        .zone-active { background: #dcfce7; border-color: #22c55e; color: #166534; font-weight: bold; }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     </style>
 </head>
-<body class="bg-gray-50 p-8">
-    <div class="max-w-6xl mx-auto space-y-8">
-        <div class="flex justify-between items-center">
-            <h1 class="text-3xl font-bold text-gray-800">🚔 Admin Command Center</h1>
-            <div class="space-x-2">
-                <button onclick="showSection('live')" class="bg-blue-600 text-white px-4 py-2 rounded">Live View</button>
-                <button onclick="showSection('history')" class="bg-gray-600 text-white px-4 py-2 rounded">History</button>
+<body class="bg-gray-100 p-6 font-sans text-gray-800">
+
+    <div class="max-w-7xl mx-auto space-y-6">
+        
+        <div class="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-gray-900 rounded-lg flex items-center justify-center text-white text-xl">
+                    <i class="fas fa-shield-alt"></i>
+                </div>
+                <h1 class="text-2xl font-black tracking-tight text-gray-900">Command Center</h1>
+            </div>
+            <div class="flex gap-2 bg-gray-100 p-1 rounded-lg">
+                <button onclick="showSection('live')" id="btn-live" class="px-4 py-1.5 rounded-md text-sm font-bold bg-white shadow text-gray-900 transition-all">Live Ops</button>
+                <button onclick="showSection('history')" id="btn-history" class="px-4 py-1.5 rounded-md text-sm font-bold text-gray-500 hover:bg-gray-200 transition-all">Data Logs</button>
             </div>
         </div>
 
-        <div id="section-live" class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div class="lg:col-span-1 space-y-6">
+        <div id="section-live" class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <div class="lg:col-span-4 space-y-6">
                 <div class="grid grid-cols-2 gap-4">
-                    <div class="bg-white p-4 rounded-xl shadow border-l-4 border-blue-500">
-                        <div class="text-gray-500 text-xs uppercase font-bold">Waiting</div>
-                        <div class="text-3xl font-bold" id="stat-waiting">0</div>
+                    <div class="bg-white p-5 rounded-xl shadow-sm border-l-4 border-yellow-500">
+                        <div class="text-gray-400 text-[10px] uppercase font-bold tracking-wider mb-1">Queue Load</div>
+                        <div class="text-4xl font-black text-gray-800" id="stat-waiting">--</div>
                     </div>
-                    <div class="bg-white p-4 rounded-xl shadow border-l-4 border-green-500">
-                        <div class="text-gray-500 text-xs uppercase font-bold">Active</div>
-                        <div class="text-3xl font-bold" id="stat-active">0</div>
+                    <div class="bg-white p-5 rounded-xl shadow-sm border-l-4 border-green-500">
+                        <div class="text-gray-400 text-[10px] uppercase font-bold tracking-wider mb-1">Active Trips</div>
+                        <div class="text-4xl font-black text-gray-800" id="stat-active">--</div>
                     </div>
                 </div>
-                <div class="bg-white rounded-xl shadow overflow-hidden">
-                    <div class="bg-gray-800 text-white p-3 font-bold text-sm">🛑 Waiting Queue</div>
-                    <div id="queue-list" class="divide-y divide-gray-100 max-h-60 overflow-y-auto"></div>
+
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col h-[500px]">
+                    <div class="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
+                        <h3 class="font-bold text-gray-700 text-sm flex items-center gap-2">
+                            <i class="fas fa-list-ul text-blue-500"></i> Dispatch Queue
+                        </h3>
+                        <span class="text-[10px] bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full font-bold">LIVE</span>
+                    </div>
+                    <div id="queue-list" class="flex-1 overflow-y-auto p-2 space-y-2">
+                        </div>
                 </div>
             </div>
-            <div class="lg:col-span-2 space-y-6">
-                <div class="bg-white p-6 rounded-xl shadow">
-                    <h3 class="font-bold text-gray-700 mb-4 text-sm uppercase">Live Heatmap</h3>
-                    <div class="zone-grid" id="map-grid"></div>
+
+            <div class="lg:col-span-8 space-y-6">
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
+                    <div class="flex justify-between items-end mb-4">
+                        <h3 class="font-bold text-gray-800 flex items-center gap-2">
+                            <i class="fas fa-map-marked-alt text-red-500"></i> Zone Heatmap
+                        </h3>
+                        <div class="flex gap-4 text-[10px] font-bold uppercase text-gray-400">
+                            <span class="flex items-center gap-1"><div class="w-2 h-2 rounded-full bg-red-200 border border-red-500"></div> High Demand</span>
+                            <span class="flex items-center gap-1"><div class="w-2 h-2 rounded-full bg-green-200 border border-green-500"></div> Active Trip</span>
+                        </div>
+                    </div>
+                    <div class="zone-grid" id="map-grid">
+                        <div class="col-span-full text-center py-10 text-gray-400 animate-pulse">Loading Geometry...</div>
+                    </div>
                 </div>
-                <div class="bg-white p-6 rounded-xl shadow">
-                    <h3 class="font-bold text-green-700 mb-4 text-sm uppercase">🚀 Ongoing Trips</h3>
-                    <table class="w-full text-sm text-left"><thead class="bg-green-50 text-green-800"><tr><th class="p-2">Driver</th><th class="p-2">Client</th><th class="p-2">Route</th><th class="p-2">Status</th></tr></thead><tbody id="active-list"></tbody></table>
+
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="p-4 bg-gray-50 border-b border-gray-100">
+                        <h3 class="font-bold text-gray-700 text-sm">🚖 Fleet Activity</h3>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-left">
+                            <thead class="text-xs text-gray-500 uppercase bg-gray-50 border-b">
+                                <tr>
+                                    <th class="px-4 py-3">Driver</th>
+                                    <th class="px-4 py-3">Client</th>
+                                    <th class="px-4 py-3">Route</th>
+                                    <th class="px-4 py-3">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="active-list" class="divide-y divide-gray-100">
+                                </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <div id="section-history" class="hidden bg-white p-6 rounded-xl shadow">
-            <h3 class="font-bold text-lg mb-4">Completed Rides</h3>
-            <table class="w-full text-left text-sm"><thead class="bg-gray-100 border-b"><tr><th class="p-3">ID</th><th class="p-3">Date</th><th class="p-3">Route</th><th class="p-3">Fare</th></tr></thead><tbody id="hist-table"></tbody></table>
+        <div id="section-history" class="hidden bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+            <h3 class="font-bold text-lg mb-4 text-gray-800">Completed Trip Logs</h3>
+            <div class="overflow-hidden rounded-lg border border-gray-200">
+                <table class="w-full text-left text-sm">
+                    <thead class="bg-gray-50 text-gray-500 uppercase text-xs">
+                        <tr>
+                            <th class="p-4">Trip ID</th>
+                            <th class="p-4">Time</th>
+                            <th class="p-4">Route</th>
+                            <th class="p-4">Fare</th>
+                        </tr>
+                    </thead>
+                    <tbody id="hist-table" class="divide-y divide-gray-100 bg-white">
+                        </tbody>
+                </table>
+            </div>
         </div>
+
     </div>
 
     <script>
-        const ZONES = { 1:"Koramangala", 2:"Indiranagar", 3:"HSR Layout", 4:"Electronic City", 5:"Whitefield", 6:"MG Road", 7:"Jayanagar", 8:"Marathahalli", 9:"Hebbal", 10:"Airport (KIAL)" };
+        let ZONE_MAP = {};
 
+        // Switch Tabs
         function showSection(id) {
             document.getElementById('section-live').classList.add('hidden');
             document.getElementById('section-history').classList.add('hidden');
             document.getElementById('section-'+id).classList.remove('hidden');
-            if(id==='history') loadHistory();
+            
+            // Toggle Button Styles
+            const btnLive = document.getElementById('btn-live');
+            const btnHist = document.getElementById('btn-history');
+            
+            if(id === 'live') {
+                btnLive.className = "px-4 py-1.5 rounded-md text-sm font-bold bg-white shadow text-gray-900 transition-all";
+                btnHist.className = "px-4 py-1.5 rounded-md text-sm font-bold text-gray-500 hover:bg-gray-200 transition-all";
+            } else {
+                btnHist.className = "px-4 py-1.5 rounded-md text-sm font-bold bg-white shadow text-gray-900 transition-all";
+                btnLive.className = "px-4 py-1.5 rounded-md text-sm font-bold text-gray-500 hover:bg-gray-200 transition-all";
+                loadHistory();
+            }
+        }
+
+        // Initialize: Fetch Locations first, then start loop
+        async function init() {
+            try {
+                const res = await fetch('/config/locations');
+                ZONE_MAP = await res.json();
+                refresh();
+                setInterval(refresh, 2000); // 2 second refresh rate
+            } catch (e) {
+                console.error("Failed to load zones", e);
+            }
+        }
+
+        // Main Refresh Loop
+        async function refresh() {
+            if(document.getElementById('section-live').classList.contains('hidden')) return;
+            
+            try {
+                const res = await fetch('/rides/queue');
+                const data = await res.json();
+                
+                // 1. Update Counters
+                document.getElementById('stat-waiting').innerText = data.queue.length;
+                document.getElementById('stat-active').innerText = data.active.length;
+
+                // 2. Render Queue List
+                const qList = document.getElementById('queue-list');
+                if (data.queue.length === 0) {
+                    qList.innerHTML = '<div class="text-center text-gray-400 mt-10 text-xs italic">Queue is empty</div>';
+                } else {
+                    qList.innerHTML = data.queue.map(q => {
+                        const isGold = (q.ui_class === 'card-gold');
+                        return `
+                            <div class="p-3 rounded-lg border ${isGold ? 'bg-yellow-50 border-yellow-200' : 'bg-gray-50 border-gray-100'} hover:shadow-md transition-all flex justify-between items-center group">
+                                <div>
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="font-bold text-sm text-gray-800">#${q.queue_position}</span>
+                                        ${isGold ? '<span class="bg-yellow-500 text-black text-[9px] font-black px-1 rounded uppercase">⚡ Scheduled</span>' : ''}
+                                        ${q.vip && !isGold ? '<span class="bg-blue-100 text-blue-600 text-[9px] font-bold px-1 rounded">POOL</span>' : ''}
+                                    </div>
+                                    <div class="text-xs text-gray-500">
+                                        <i class="fas fa-user text-[10px] mr-1"></i> ${q.client_name}
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-xs font-bold text-gray-700">${q.from} <i class="fas fa-arrow-right text-[10px] text-gray-400 mx-1"></i> ${q.to}</div>
+                                    <div class="text-xs font-bold text-green-600 mt-0.5">₹${q.price}</div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+
+                // 3. Render Active List
+                const aList = document.getElementById('active-list');
+                if (data.active.length === 0) {
+                    aList.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-400 text-xs italic">No active trips currently.</td></tr>';
+                } else {
+                    aList.innerHTML = data.active.map(a => `
+                        <tr class="hover:bg-gray-50 transition-colors">
+                            <td class="px-4 py-3 font-bold text-gray-900">${a.driver}</td>
+                            <td class="px-4 py-3 text-gray-600">Client ${a.client}</td>
+                            <td class="px-4 py-3 text-gray-600 text-xs">${a.from} <i class="fas fa-long-arrow-alt-right mx-1"></i> ${a.to}</td>
+                            <td class="px-4 py-3"><span class="bg-green-100 text-green-700 px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wide">On Trip</span></td>
+                        </tr>
+                    `).join('');
+                }
+
+                // 4. Render Heatmap (Dynamic for 101 Zones)
+                const grid = document.getElementById('map-grid');
+                let gridHTML = '';
+                
+                // Convert object keys to sorted array of IDs
+                const zoneIds = Object.keys(ZONE_MAP).map(Number).sort((a,b) => a-b);
+                
+                zoneIds.forEach(id => {
+                    const name = ZONE_MAP[id];
+                    // Check if this zone is involved in any Queue or Active ride
+                    const inQueue = data.queue.some(r => r.from === name || r.to === name);
+                    const inActive = data.active.some(r => r.from === name || r.to === name);
+                    
+                    let statusClass = "zone-box bg-white";
+                    if (inQueue) statusClass = "zone-box zone-busy";
+                    else if (inActive) statusClass = "zone-box zone-active";
+
+                    gridHTML += `
+                        <div class="${statusClass}" title="${name}">
+                            <div class="font-bold mb-0.5 text-gray-800">Z-${id}</div>
+                            <div class="truncate w-full px-1 text-[9px] text-gray-500 leading-tight">${name}</div>
+                        </div>
+                    `;
+                });
+                grid.innerHTML = gridHTML;
+
+            } catch(e) { console.error("Refresh Loop Error", e); }
         }
 
         async function loadHistory() {
-            const res = await fetch('/rides/history/admin/0');
-            const data = await res.json();
-            document.getElementById('hist-table').innerHTML = data.map(r => `<tr class="border-b"><td class="p-3">#${r.id}</td><td class="p-3 text-gray-500">${r.date}</td><td class="p-3">${r.from} ➡ ${r.to}</td><td class="p-3 font-bold text-green-600">₹${r.price}</td></tr>`).join('');
+            try {
+                const res = await fetch('/rides/history/admin/0');
+                const data = await res.json();
+                const table = document.getElementById('hist-table');
+                if (data.length === 0) {
+                    table.innerHTML = '<tr><td colspan="4" class="p-6 text-center text-gray-400 italic">No history available yet.</td></tr>';
+                    return;
+                }
+                table.innerHTML = data.map(r => `
+                    <tr class="hover:bg-gray-50 border-b border-gray-100">
+                        <td class="p-4 font-mono text-xs font-bold text-gray-500">#${r.id}</td>
+                        <td class="p-4 text-gray-600 text-xs">${r.date || 'Just now'}</td>
+                        <td class="p-4 text-gray-800 text-sm font-medium">${r.from} <i class="fas fa-arrow-right text-xs text-gray-400 mx-2"></i> ${r.to}</td>
+                        <td class="p-4 font-bold text-green-600">₹${r.price}</td>
+                    </tr>
+                `).join('');
+            } catch(e) { console.error(e); }
         }
 
-        async function refresh() {
-            if(document.getElementById('section-live').classList.contains('hidden')) return;
-            const res = await fetch('/rides/queue');
-            const data = await res.json();
-            document.getElementById('stat-waiting').innerText = data.queue.length;
-            document.getElementById('stat-active').innerText = data.active.length;
-
-            document.getElementById('queue-list').innerHTML = data.queue.map(q => `<div class="p-3 hover:bg-gray-50 flex justify-between"><div><span class="font-bold text-sm">#${q.queue_position}</span> <span class="text-xs">Client ${q.client_id}</span></div><div class="text-right text-xs font-bold">${q.from} → ${q.to} ${q.vip?'<span class="text-yellow-600">VIP</span>':''}</div></div>`).join('');
-            
-            document.getElementById('active-list').innerHTML = data.active.map(a => `<tr class="border-b"><td class="p-2 font-bold">${a.driver}</td><td class="p-2">Client ${a.client}</td><td class="p-2">${a.from} → ${a.to}</td><td class="p-2"><span class="bg-green-100 text-green-800 px-2 py-1 rounded text-xs">On Trip</span></td></tr>`).join('');
-
-            document.getElementById('map-grid').innerHTML = '';
-            for(let i=1; i<=10; i++) {
-                const busy = data.queue.some(r=>r.from===ZONES[i]||r.to===ZONES[i]) || data.active.some(r=>r.from===ZONES[i]||r.to===ZONES[i]);
-                document.getElementById('map-grid').innerHTML += `<div class="zone-box ${busy?'zone-active':'zone-idle'}"><div class="font-bold text-[10px] text-gray-700">${ZONES[i]}</div>${busy?'<div class="text-red-500 text-xs font-bold">●</div>':''}</div>`;
-            }
-        }
-        setInterval(refresh, 2000); refresh();
+        // Start the engine
+        init();
     </script>
 </body>
 </html>
