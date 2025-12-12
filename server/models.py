@@ -16,6 +16,10 @@ class BookingStatus(str, enum.Enum):
     cancelled = "cancelled"
     paused = "paused"
 
+class BookingSource(str,enum.Enum):
+    IMMEDIATE = "immediate"           
+    SCHEDULED_MANUAL = "scheduled"    
+    AUTO_FEATURE = "auto_feature"
 class Client(Base):
     __tablename__ = "clients"
     id = Column(Integer, primary_key=True, index=True)
@@ -45,9 +49,9 @@ class Ride(Base):
     drop_zone = Column(Integer, nullable=False)
     is_priority = Column(Integer, default=0)  # stored as 1/0
     status = Column(Enum(RideStatus), default=RideStatus.waiting)
+    source = Column(Enum(BookingSource), default=BookingSource.IMMEDIATE)
+    price = Column(Integer, default=0)
     requested_at = Column(DateTime(timezone=True), server_default=func.now())
-
-# In server/models.py
 
 class Booking(Base):
     __tablename__ = "bookings"
@@ -58,8 +62,6 @@ class Booking(Base):
     days_of_week = Column(String(50), nullable=False)
     time_of_day = Column(Time, nullable=False)
     start_date = Column(Date, nullable=False)
-    
-    # NEW: Store if this subscription is for Pooling or Solo VIP
     ride_mode = Column(String(20), default="solo")  # "pool" or "solo"
     
     monthly_price = Column(Integer, nullable=False)
@@ -75,7 +77,6 @@ class BookingRide(Base):
     status = Column(Enum(RideStatus), default=RideStatus.waiting)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-# New: offers to pool a set of BookingRides
 class PoolOfferStatus(str, enum.Enum):
     open = "open"
     filled = "filled"
@@ -85,25 +86,21 @@ class PoolOfferStatus(str, enum.Enum):
 class PoolOffer(Base):
     __tablename__ = "pool_offers"
     id = Column(Integer, primary_key=True, index=True)
-    # JSON text storing list of booking_ride ids that are candidates for this offer
     booking_ride_ids = Column(Text, nullable=False)
     start_zone = Column(Integer, nullable=False)
-    drop_zone = Column(Integer, nullable=False)  # pooling only offered when same drop_zone
+    drop_zone = Column(Integer, nullable=False) 
     scheduled_for = Column(DateTime(timezone=True), nullable=False)
     status = Column(Enum(PoolOfferStatus), default=PoolOfferStatus.open)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-# New: pooled ride record (represents an assigned pooled trip)
 class PooledRide(Base):
     __tablename__ = "pooled_rides"
     id = Column(Integer, primary_key=True, index=True)
-    # JSON text storing list of client ids
     client_ids = Column(Text, nullable=False)
-    # corresponding booking_ride ids if any
     booking_ride_ids = Column(Text, nullable=True)
     driver_id = Column(Integer, ForeignKey("drivers.id"), nullable=True)
     start_zone = Column(Integer, nullable=False)
     drop_zone = Column(Integer, nullable=False)
-    is_priority = Column(Integer, default=1)  # pooled bookings are priority
+    is_priority = Column(Integer, default=1) 
     status = Column(Enum(RideStatus), default=RideStatus.waiting)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

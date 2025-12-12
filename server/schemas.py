@@ -2,6 +2,7 @@ from pydantic import BaseModel, ConfigDict
 from typing import Optional, List
 from datetime import datetime, date, time
 from .models import DriverStatus, RideStatus, BookingStatus
+from server.models import BookingSource
 
 # ----------------------
 # Basic create/read DTOs
@@ -21,6 +22,7 @@ class RideRequest(BaseModel):
     start_zone: int
     drop_zone: int
     is_priority: Optional[bool] = False
+    booking_source: BookingSource = BookingSource.IMMEDIATE
 
 class Ride(BaseModel):
     id: int

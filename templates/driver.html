@@ -10,25 +10,36 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         body { background-color: #111827; color: #f3f4f6; }
-        #map { height: 50vh; width: 100%; z-index: 0; background: #111827; }
-        .glass-panel { background: rgba(31, 41, 55, 0.95); backdrop-filter: blur(8px); border-top: 1px solid rgba(255,255,255,0.1); }
-        .new-card { animation: pulse 2s infinite; }
-        @keyframes pulse { 0% { border-color: #eab308; } 50% { border-color: #facc15; } 100% { border-color: #eab308; } }
+        #map { height: 55vh; width: 100%; z-index: 0; background: #111827; }
+        
+        .glass-panel { 
+            background: rgba(17, 24, 39, 0.95); 
+            backdrop-filter: blur(10px); 
+            border-top: 1px solid rgba(255,255,255,0.1); 
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.5);
+        }
+
+        @keyframes slideIn {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .ride-card { animation: slideIn 0.3s ease-out; }
     </style>
 </head>
-<body class="h-screen flex flex-col overflow-hidden">
+<body class="h-screen flex flex-col overflow-hidden font-sans">
 
-    <div class="p-4 bg-gray-900 border-b border-gray-800 flex justify-between items-center z-50">
-        <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-full bg-yellow-500 flex items-center justify-center text-black font-bold">
+    <div class="absolute top-0 w-full p-4 flex justify-between items-center z-50 bg-gradient-to-b from-gray-900/90 to-transparent pointer-events-none">
+        <div class="pointer-events-auto flex items-center gap-3 bg-gray-900/80 backdrop-blur px-4 py-2 rounded-full border border-gray-700">
+            <div class="w-8 h-8 rounded-full bg-yellow-500 flex items-center justify-center text-black font-bold">
                 <i class="fas fa-taxi"></i>
             </div>
             <div>
-                <h1 class="text-lg font-bold text-white leading-none" id="driver-name">Captain</h1>
-                <span class="text-xs text-gray-400" id="driver-vehicle">#{{ id }}</span>
+                <h1 id="driver-name" class="text-sm font-bold text-white leading-none">Captain #{{ id }}</h1>
+                <span id="driver-vehicle" class="text-[10px] text-gray-400">Loading...</span>
             </div>
         </div>
-        <div class="px-3 py-1 bg-green-900/30 border border-green-800 text-green-400 text-xs font-bold rounded-full">
+
+        <div class="pointer-events-auto px-3 py-1 bg-green-900/80 border border-green-500/30 text-green-400 text-xs font-bold rounded-full shadow-[0_0_10px_rgba(74,222,128,0.2)]">
             ● ONLINE
         </div>
     </div>
@@ -37,34 +48,38 @@
         <div id="map"></div>
     </div>
 
-    <div class="glass-panel flex-1 flex flex-col rounded-t-3xl -mt-6 z-30 shadow-2xl relative">
+    <div class="glass-panel flex-1 flex flex-col rounded-t-3xl -mt-8 z-30 relative">
         <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mt-3 mb-2 opacity-50"></div>
         
+        <div class="px-6 py-2 border-b border-gray-800 flex justify-between items-end">
+            <h2 class="text-lg font-bold text-gray-200">Available Rides</h2>
+            <span class="text-xs text-gray-500 mb-1">Live Feed</span>
+        </div>
+
         <div id="feed-container" class="p-4 flex-1 overflow-y-auto">
-            <div id="feed" class="space-y-3"></div>
-            
-            <div class="mt-4 pt-4 border-t border-gray-700">
-                <h3 class="text-[10px] uppercase font-bold text-blue-400 mb-2">High Value Pools</h3>
-                <div id="pool-feed" class="space-y-2 text-center text-xs text-gray-500">Scanning...</div>
+            <div id="feed" class="space-y-3 pb-20">
+                <div class="text-center text-gray-500 text-sm mt-10 animate-pulse">
+                    Scanning for passengers...
+                </div>
             </div>
         </div>
 
-        <div id="active-panel" class="hidden absolute inset-0 bg-gray-900/98 z-50 p-6 flex flex-col justify-center text-center">
-            <div class="mb-6">
-                <i class="fas fa-route text-4xl text-green-500 mb-2 animate-bounce"></i>
-                <h2 class="text-2xl font-bold text-white">Trip Active</h2>
-                <p class="text-gray-400 text-sm">Follow GPS to destination</p>
+        <div id="active-panel" class="hidden absolute inset-0 bg-gray-900 z-50 p-6 flex flex-col justify-center text-center rounded-t-3xl">
+            <div class="mb-8">
+                <div class="w-20 h-20 bg-green-900/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-green-500/30">
+                    <i class="fas fa-location-arrow text-3xl text-green-500 animate-pulse"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-white">Trip In Progress</h2>
+                <p class="text-gray-400 text-sm mt-2">Follow GPS to destination</p>
             </div>
 
-            <button id="btn-arrived" onclick="updateStatus('driver_arrived')" class="w-full bg-gray-800 hover:bg-gray-700 text-white py-4 rounded-xl font-bold border border-gray-600 mb-3">
+            <button id="btn-arrived" onclick="updateStatus('driver_arrived')" class="w-full bg-gray-800 hover:bg-gray-700 text-white py-4 rounded-xl font-bold border border-gray-600 mb-3 transition-all">
                 📍 Arrived at Pickup
             </button>
-            
-            <button id="btn-start" onclick="updateStatus('start_trip')" class="hidden w-full bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-xl font-bold mb-3">
+            <button id="btn-start" onclick="updateStatus('start_trip')" class="hidden w-full bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-xl font-bold mb-3 shadow-lg shadow-blue-900/20 transition-all">
                 ▶️ Start Trip
             </button>
-            
-            <button id="btn-complete" onclick="updateStatus('complete_ride')" class="hidden w-full bg-green-600 hover:bg-green-500 text-white py-4 rounded-xl font-bold">
+            <button id="btn-complete" onclick="updateStatus('complete_ride')" class="hidden w-full bg-green-600 hover:bg-green-500 text-white py-4 rounded-xl font-bold shadow-lg shadow-green-900/20 transition-all">
                 ✅ Complete & Collect
             </button>
         </div>
@@ -73,105 +88,103 @@
     <script>
         const driverId = {{ id }};
         const ws = new WebSocket(`ws://${window.location.host}/ws/driver/${driverId}`);
-        const map = L.map('map', {zoomControl:false}).setView([12.971, 77.594], 12);
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
+        
+        // MAP SETUP
+        const map = L.map('map', {zoomControl: false}).setView([12.9716, 77.5946], 13);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '', subdomains: 'abcd', maxZoom: 19
+        }).addTo(map);
 
-        // --- 1. FRONTEND IGNORE LIST (Instant UX) ---
         const declinedRides = new Set(); 
 
-        fetch(`/api/driver/${driverId}`).then(r=>r.json()).then(d => {
-            document.getElementById('driver-name').innerText = d.name;
-            document.getElementById('driver-vehicle').innerText = d.vehicle_number;
-        });
-
-        // 101 Location Logic
-        const REAL_COORDS = { 1:[12.9352,77.6245], 2:[12.9719,77.6412], 3:[12.9308,77.5838], 4:[12.9121,77.6446], 5:[12.9698,77.7500], 6:[12.9591,77.6974], 101:[12.9868,77.7383] };
-        function getSafeCoords(id) {
-            id = parseInt(id);
-            if (REAL_COORDS[id]) return REAL_COORDS[id];
-            const baseLat = 12.97, baseLng = 77.59;
-            const latOffset = ((id * 13) % 100) / 1000;
-            const lngOffset = ((id * 7) % 100) / 1000;
-            const dirLat = id % 2 === 0 ? 1 : -1;
-            const dirLng = id % 3 === 0 ? 1 : -1;
-            return [baseLat + (latOffset * dirLat * 5), baseLng + (lngOffset * dirLng * 5)];
+        // --- NEW: FETCH DRIVER DETAILS ---
+        async function fetchDriverDetails() {
+            try {
+                const res = await fetch(`/api/driver/${driverId}`);
+                const data = await res.json();
+                if (data) {
+                    document.getElementById('driver-name').innerText = data.name;
+                    document.getElementById('driver-vehicle').innerText = data.vehicle_number;
+                }
+            } catch (e) {
+                console.error("Could not fetch driver details", e);
+            }
         }
+        fetchDriverDetails(); // Call immediately on load
+        // ---------------------------------
 
-        // UNIFIED RENDERER
-        function renderCard(data) {
-            if(document.getElementById(`ride-${data.ride_id}`)) return;
-            if(declinedRides.has(data.ride_id)) return;
+        function renderCard(ride) {
+            if(document.getElementById(`ride-${ride.queue_position}`)) return;
+            if(declinedRides.has(ride.queue_position)) return;
+
+            const feed = document.getElementById('feed');
+            if(feed.innerText.includes("Scanning")) feed.innerHTML = '';
 
             const card = document.createElement('div');
-            card.id = `ride-${data.ride_id}`;
-            card.className = `p-4 rounded-xl border ${data.is_vip ? 'bg-yellow-900/20 border-yellow-500 new-card' : 'bg-gray-800 border-gray-700'} mb-3`;
-            
+            card.id = `ride-${ride.queue_position}`;
+            card.className = "ride-card relative overflow-hidden rounded-xl border mb-3 transition-all duration-300";
+
+            const isGold = (ride.ui_class === 'card-gold');
+
+            if (isGold) {
+                card.classList.add('bg-gradient-to-br', 'from-yellow-900/40', 'to-gray-900', 'border-yellow-500/50', 'shadow-[0_0_15px_rgba(234,179,8,0.15)]');
+            } else {
+                card.classList.add('bg-gray-800/60', 'border-gray-700');
+            }
+
             card.innerHTML = `
-                <div class="flex justify-between items-start mb-3">
-                    <div>
-                        ${data.is_vip ? '<span class="bg-yellow-500 text-black text-[10px] font-bold px-2 py-0.5 rounded">⚡ VIP</span>' : ''}
-                        ${data.ride_type === 'pool' ? '<span class="bg-blue-500 text-white text-[10px] font-bold px-2 py-0.5 rounded">POOL</span>' : ''}
+                <div class="p-4 relative z-10">
+                    <div class="flex justify-between items-start mb-3">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <h3 class="font-bold text-white text-lg leading-tight">${ride.client_name}</h3>
+                                ${isGold ? '<span class="bg-yellow-500 text-black text-[10px] font-extrabold px-1.5 py-0.5 rounded">⚡ SCHEDULED</span>' : ''}
+                            </div>
+                            <span class="text-xs text-gray-400">ID: ${ride.client_id}</span>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-xl font-bold ${isGold ? 'text-yellow-400' : 'text-green-400'}">₹${ride.price}</div>
+                            <div class="text-[10px] text-gray-500 uppercase font-bold">Earnings</div>
+                        </div>
                     </div>
-                    <div class="text-right">
-                        <div class="text-xl font-bold text-green-400">₹${data.price}</div>
-                        <div class="text-[10px] text-gray-500 uppercase">Payout</div>
+                    <div class="space-y-2 mb-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]"></div>
+                            <span class="text-sm font-medium text-gray-200">${ride.from}</span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div class="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]"></div>
+                            <span class="text-sm font-medium text-gray-200">${ride.to}</span>
+                        </div>
                     </div>
-                </div>
-                <div class="space-y-2 mb-4">
-                    <div class="text-sm font-bold text-white">🟢 ${data.from}</div>
-                    <div class="text-sm font-bold text-white">🔴 ${data.to}</div>
-                </div>
-                
-                <div class="flex gap-2">
-                    <button onclick="decline(${data.ride_id})" class="flex-1 py-3 rounded-lg font-bold text-gray-400 bg-gray-700 hover:bg-gray-600 border border-gray-600 transition-colors">
-                        Decline
-                    </button>
-                    <button onclick="accept(${data.ride_id})" class="flex-[2] py-3 rounded-lg font-bold text-black ${data.is_vip ? 'bg-yellow-500 hover:bg-yellow-400' : 'bg-white hover:bg-gray-200'}">
-                        ACCEPT
-                    </button>
+                    <div class="flex gap-3">
+                        <button onclick="decline(${ride.queue_position})" class="flex-1 py-3 rounded-lg font-bold text-sm text-gray-400 bg-gray-900/50 hover:bg-gray-800 border border-gray-700 transition-colors">DECLINE</button>
+                        <button onclick="accept(${ride.queue_position})" class="flex-[2] py-3 rounded-lg font-bold text-sm text-black shadow-lg transition-transform active:scale-95 ${isGold ? 'bg-gradient-to-r from-yellow-400 to-yellow-600 hover:from-yellow-300 hover:to-yellow-500' : 'bg-white hover:bg-gray-100'}">ACCEPT RIDE</button>
+                    </div>
                 </div>
             `;
-            
-            if(data.is_vip) document.getElementById('feed').prepend(card);
-            else document.getElementById('feed').appendChild(card);
+            if(isGold) feed.prepend(card);
+            else feed.appendChild(card);
         }
 
         ws.onmessage = (e) => {
             const data = JSON.parse(e.data);
-            if(data.type === 'new_ride') renderCard(data);
+            if(data.type === 'new_ride' || data.type === 'queue_update') fetchQueue();
         }
 
-        // POLLING LOOP (Updated to filter by driverId)
-        async function checkQueue() {
+        async function fetchQueue() {
             try {
-                // PASS DRIVER ID TO SERVER TO GET FILTERED LIST
                 const res = await fetch(`/rides/queue?driver_id=${driverId}`);
                 const data = await res.json();
-                
-                if (data.queue.length > 0) {
-                    data.queue.forEach(r => {
-                        renderCard({
-                            ride_id: r.client_id, from: r.from, to: r.to, 
-                            is_vip: r.vip, ride_type: r.vip ? 'solo' : 'pool', price: r.price
-                        });
-                    });
+                if (data.queue.length === 0) {
+                    if(document.getElementById('feed').children.length === 0) {
+                         document.getElementById('feed').innerHTML = '<div class="text-center text-gray-500 text-sm mt-10 animate-pulse">Scanning for passengers...</div>';
+                    }
+                } else {
+                    data.queue.forEach(ride => renderCard(ride));
                 }
-                const pRes = await fetch('/pooling/offers');
-                const pData = await pRes.json();
-                const pFeed = document.getElementById('pool-feed');
-                if(pData.length > 0) {
-                    pFeed.innerHTML = pData.map(p => `
-                        <div class="bg-blue-900/20 border border-blue-600/50 p-3 rounded-lg flex justify-between items-center">
-                            <div class="text-left">
-                                <div class="text-blue-400 font-bold text-xs">POOL • ₹${p.value}</div>
-                                <div class="text-[10px] text-gray-400">${p.from} ➡ ${p.to}</div>
-                            </div>
-                            <button onclick="acceptPool(${p.id})" class="bg-blue-600 text-white text-xs px-3 py-1 rounded">JOIN</button>
-                        </div>`).join('');
-                }
-            } catch(e) {}
+            } catch(e) { console.error(e); }
         }
-        setInterval(checkQueue, 2000);
 
         function accept(id) {
             ws.send(JSON.stringify({ "action": "accept_ride", "ride_id": id }));
@@ -180,14 +193,12 @@
         }
 
         function decline(id) {
+            declinedRides.add(id);
+            ws.send(JSON.stringify({ "action": "decline_ride", "ride_id": id }));
             const card = document.getElementById(`ride-${id}`);
             if(card) {
-                declinedRides.add(id); // Local ignore
-                ws.send(JSON.stringify({ "action": "decline_ride", "ride_id": id })); // Backend ignore
-
-                card.style.transition = "all 0.3s ease";
-                card.style.opacity = "0";
-                card.style.transform = "translateX(-100%)";
+                card.style.opacity = '0';
+                card.style.transform = 'translateX(100%)';
                 setTimeout(() => card.remove(), 300);
             }
         }
@@ -201,10 +212,12 @@
                 document.getElementById('btn-start').classList.add('hidden');
                 document.getElementById('btn-complete').classList.remove('hidden');
             } else if (action === 'complete_ride') {
-                alert("Paid & Completed!"); location.reload();
+                location.reload();
             }
         }
-        function acceptPool(id) { ws.send(JSON.stringify({ "action": "accept_pooled", "pooled_id": id })); }
+
+        fetchQueue();
+        setInterval(fetchQueue, 3000);
     </script>
 </body>
 </html>

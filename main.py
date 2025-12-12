@@ -4,25 +4,79 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.requests import Request
 from sqlalchemy.orm import Session
-import json
-import random 
 from collections import defaultdict
 from typing import List, Optional
-
 from server.database import engine, get_db, SessionLocal
 from server import models, schemas
+from server.models import BookingSource
 from server.connection_manager import ConnectionManager
+import json, random, asyncio
+from datetime import datetime, time
 
-# 1. DB RESET ON STARTUP
+# --- DB RESET ON STARTUP ---
 models.Base.metadata.drop_all(bind=engine)
 models.Base.metadata.create_all(bind=engine)
 
 # --- BACKEND BLACKLIST STORAGE ---
-# Stores { ride_id: {driver_id1, driver_id2} }
 DECLINED_RIDES = defaultdict(set) 
-# ---------------------------------
+
+# --- BACKGROUND SCHEDULER ---
+async def check_scheduled_rides():
+    while True:
+        try:
+            now = datetime.now()
+            current_day = now.strftime("%a").lower()
+            current_hour = now.hour
+            current_minute = now.minute
+            db = SessionLocal()
+            bookings = db.query(models.Booking).filter(models.Booking.status == "active").all()
+            for b in bookings:
+                if current_day in b.days_of_week.lower():
+                    if b.time_of_day.hour == current_hour and b.time_of_day.minute == current_minute:
+                        start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+                        already_triggered = db.query(models.Ride).filter(
+                            models.Ride.client_id == b.client_id,
+                            models.Ride.source == 'scheduled',
+                            models.Ride.requested_at >= start_of_day
+                        ).first()
+
+                        if not already_triggered:
+                            print(f"⏰ Triggering Scheduled Ride for Client {b.client_id}")
+                            is_pool = (b.ride_mode == 'pool')
+                            driver_pay = calculate_price_for_driver(b.start_zone, b.drop_zone, is_pool, "scheduled")
+                            
+                            ride = models.Ride(
+                                client_id=b.client_id,
+                                start_zone=b.start_zone,
+                                drop_zone=b.drop_zone,
+                                is_priority=1,       # Gold Card
+                                status=models.RideStatus.waiting,
+                                source="scheduled",
+                                price=driver_pay
+                            )
+                            db.add(ride)
+                            db.commit()
+                            db.refresh(ride)
+                            await manager.broadcast_to_drivers({
+                                "type": "new_ride", 
+                                "ride_id": ride.id, 
+                                "from": get_location_name(b.start_zone), 
+                                "to": get_location_name(b.drop_zone),
+                                "is_vip": True, 
+                                "ride_type": b.ride_mode, 
+                                "price": ride.price
+                            })
+        except Exception as e:
+            print(f"Scheduler Error: {e}")
+        finally:
+            db.close()
+        await asyncio.sleep(15) 
 
 app = FastAPI(title="Namma Yatri Clone")
+
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(check_scheduled_rides())    
 
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"]
@@ -32,7 +86,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 manager = ConnectionManager()
 
-# 2. FULL 101 LOCATIONS
+# --- LOCATIONS ---
 ZONE_MAP = {
     1: "Koramangala", 2: "Indiranagar", 3: "Jayanagar", 4: "HSR Layout", 5: "Whitefield",
     6: "Marathahalli", 7: "Electronic City", 8: "BTM Layout", 9: "Malleswaram", 10: "JP Nagar",
@@ -61,13 +115,16 @@ BASE_RATE = 20.0
 def get_location_name(zone_id: int):
     return ZONE_MAP.get(zone_id, f"Zone {zone_id}")
 
-# 3. PRICING LOGIC
-def calculate_price_for_driver(start: int, drop: int, is_pool: bool, is_vip: bool) -> int:
+# --- PRICING ---
+def calculate_price_for_driver(start: int, drop: int, is_pool: bool, source: str = "immediate") -> int:
     dist = abs(start - drop) or 1
     base = dist * BASE_RATE * 10
-    if is_pool: return int(base * 1.4) 
-    elif is_vip: return int(base * 1.2)
-    return int(base)
+    multiplier = 1.0
+    if is_pool:
+        multiplier = 1.5
+    if source in [BookingSource.SCHEDULED_MANUAL, BookingSource.AUTO_FEATURE, "scheduled", "auto_feature"]:
+        multiplier *= 1.2
+    return int(base * multiplier)
 
 def calculate_price_for_user(start: int, drop: int, is_pool: bool) -> int:
     dist = abs(start - drop) or 1
@@ -114,19 +171,31 @@ async def rider_websocket(websocket: WebSocket, rider_id: int):
             elif payload.get("action") == "request_ride":
                 db = SessionLocal()
                 try:
-                    s = payload["start_zone"]; d = payload["drop_zone"]; r_type = payload.get("ride_type", "solo")
-                    
-                    is_vip = False
-                    if r_type == "pool": is_vip = True 
-                    
-                    driver_pay = calculate_price_for_driver(s, d, r_type=="pool", is_vip)
-
-                    ride = models.Ride(client_id=rider_id, start_zone=s, drop_zone=d, is_priority=(1 if is_vip else 0), status=models.RideStatus.waiting)
+                    s = payload["start_zone"]
+                    d = payload["drop_zone"]
+                    r_type = payload.get("ride_type", "solo")
+                    src_str = payload.get("source", "immediate")
+                    driver_pay = calculate_price_for_driver(s, d, (r_type == "pool"), src_str)
+                    is_gold_ui = (src_str == "auto_feature" or src_str == BookingSource.AUTO_FEATURE)
+                    ride = models.Ride(
+                        client_id=rider_id, 
+                        start_zone=s, 
+                        drop_zone=d, 
+                        is_priority=(1 if is_gold_ui else 0),
+                        status=models.RideStatus.waiting,
+                        source=src_str,
+                        price=driver_pay 
+                    )
                     db.add(ride); db.commit(); db.refresh(ride)
 
                     notif = {
-                        "type": "new_ride", "ride_id": ride.id, "from": get_location_name(s), "to": get_location_name(d),
-                        "is_vip": is_vip, "ride_type": r_type, "price": driver_pay
+                        "type": "new_ride", 
+                        "ride_id": ride.id, 
+                        "from": get_location_name(s), 
+                        "to": get_location_name(d),
+                        "is_vip": is_gold_ui, 
+                        "ride_type": r_type, 
+                        "price": ride.price
                     }
                     await manager.broadcast_to_drivers(notif)
                     await manager.send_to_rider(rider_id, {"type": "info", "message": "Searching..."})
@@ -211,26 +280,29 @@ async def driver_websocket(websocket: WebSocket, driver_id: int):
 @app.get("/config/locations")   
 def get_locs(): return ZONE_MAP
 
-# 4. QUEUE SORTING WITH BLACKLIST FILTER
+# --- QUEUE & HISTORY ---
 @app.get("/rides/queue")
 def get_q(driver_id: Optional[int] = None, db: Session=Depends(get_db)):
     waiting = db.query(models.Ride).filter(models.Ride.status == models.RideStatus.waiting)\
         .order_by(models.Ride.is_priority.desc(), models.Ride.requested_at.asc()).all()
-    
-    # FILTER: Remove rides this driver declined
     if driver_id:
         waiting = [r for r in waiting if driver_id not in DECLINED_RIDES[r.id]]
-    
     q_data = []
     for r in waiting:
-        price = calculate_price_for_driver(r.start_zone, r.drop_zone, False, bool(r.is_priority))
+        client = db.query(models.Client).filter(models.Client.id == r.client_id).first()
+        client_name = client.name if client else "Unknown User"
+        r_source = getattr(r, "source", "immediate")
+        ui_class = "card-gold" if r_source in ["scheduled", "auto_feature", BookingSource.AUTO_FEATURE] else "card-normal"
+        final_price = r.price if r.price else 0
         q_data.append({ 
             "queue_position": r.id, 
             "client_id": r.client_id, 
+            "client_name": client_name,
             "from": get_location_name(r.start_zone), 
             "to": get_location_name(r.drop_zone), 
             "vip": bool(r.is_priority), 
-            "price": price
+            "price": final_price,          # <--- CORRECT
+            "ui_class": ui_class
         })
     return {"queue": q_data, "active": [], "drivers": []}
 

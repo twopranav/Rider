@@ -27,83 +27,89 @@
         }
     </style>
 </head>
-<body class="bg-gray-900 text-white min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
+<body class="bg-gray-900 text-white min-h-screen font-sans overflow-y-auto relative">
 
-    <div class="absolute top-0 left-0 w-full h-full bg-[url('https://images.unsplash.com/photo-1620564460785-7b5064791502?q=80&w=2070&auto=format&fit=crop')] bg-cover bg-center opacity-30 blur-[3px] transform scale-105"></div>
+    <div class="fixed inset-0 z-0">
+        <div class="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?q=80&w=2070&auto=format&fit=crop')] bg-cover bg-center opacity-40 blur-[2px] transform scale-105"></div>
+        <div class="absolute inset-0 bg-gradient-to-b from-gray-900/50 via-gray-900/20 to-gray-900/90"></div>
+    </div>
 
-    <div class="bg-gray-900/80 p-8 rounded-3xl shadow-2xl w-full max-w-md border border-gray-700/50 backdrop-blur-xl relative z-10 transition-all hover:border-yellow-500/30">
+    <div class="relative z-10 min-h-screen flex items-center justify-center p-4 py-10">
         
-        <div class="text-center mb-8">
-            <div class="inline-flex items-center justify-center gap-3 mb-2">
-                <div class="w-14 h-14 bg-gradient-to-br from-green-500 to-yellow-500 rounded-2xl flex items-center justify-center shadow-lg shadow-yellow-500/20 transform -rotate-2">
-                    <i class="fas fa-shuttle-van text-3xl text-black"></i>
-                </div>
-                <div class="text-left flex items-center">
-                    <h1 class="text-4xl font-black text-white tracking-tighter leading-none italic">Rider</h1>
-                </div>
-            </div>
-            <p class="text-gray-400 text-sm font-medium mt-1">Join the people's mobility network</p>
-        </div>
-
-        <div class="space-y-5">
+        <div class="bg-gray-900/80 p-8 rounded-3xl shadow-2xl w-full max-w-md border border-gray-700/50 backdrop-blur-xl transition-all hover:border-yellow-500/30">
             
-            <div>
-                <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 ml-1">I am a</label>
-                <div class="relative group">
-                    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <i class="fas fa-user-tag text-yellow-500 transition-colors"></i>
+            <div class="text-center mb-8">
+                <div class="inline-flex items-center justify-center gap-3 mb-2">
+                    <div class="w-14 h-14 bg-gradient-to-br from-green-500 to-yellow-500 rounded-2xl flex items-center justify-center shadow-lg shadow-yellow-500/20 transform -rotate-2">
+                        <i class="fas fa-shuttle-van text-3xl text-black"></i>
                     </div>
-                    <select id="role" onchange="toggleFields()" class="w-full bg-gray-800 border border-gray-700 text-white rounded-xl pl-11 pr-4 py-4 appearance-none focus:outline-none focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 font-bold cursor-pointer transition-all hover:bg-gray-750">
-                        <option value="client">👤 Passenger (Rider)</option>
-                        <option value="driver">🛺 Captain (Auto Driver)</option>
-                    </select>
-                    <i class="fas fa-chevron-down absolute right-4 top-5 text-gray-500 pointer-events-none"></i>
+                    <div class="text-left flex items-center">
+                        <h1 class="text-4xl font-black text-white tracking-tighter leading-none italic">Rider</h1>
+                    </div>
                 </div>
+                <p class="text-gray-400 text-sm font-medium mt-1">Join the people's mobility network</p>
             </div>
 
-            <div class="grid grid-cols-1 gap-4">
+            <div class="space-y-5">
+                
                 <div>
-                    <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 ml-1">Full Name</label>
-                    <input type="text" id="name" class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-4 focus:outline-none focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 text-white font-medium placeholder-gray-600 transition-all" placeholder="e.g. Rahul Dravid">
-                </div>
-                <div>
-                    <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 ml-1">Mobile (Port)</label>
-                    <input type="number" id="port" class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-4 focus:outline-none focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 text-white font-medium placeholder-gray-600 transition-all" placeholder="e.g. 9001">
-                </div>
-            </div>
-
-            <div id="driverFields">
-                <div class="bg-yellow-500/10 border border-yellow-500/20 p-3 rounded-xl flex items-start gap-3 mb-4">
-                    <i class="fas fa-id-card text-yellow-500 mt-1"></i>
-                    <p class="text-xs text-yellow-200/90 leading-relaxed font-medium">Captain details are required for vehicle verification and zone assignment.</p>
-                </div>
-                <div class="space-y-4">
-                    <div>
-                        <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 ml-1">Vehicle Number</label>
-                        <div class="relative">
-                            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><i class="fas fa-car text-gray-500"></i></div>
-                            <input type="text" id="vehicle" class="w-full bg-gray-800 border border-gray-700 rounded-xl pl-11 pr-4 py-4 focus:outline-none focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 text-white font-medium placeholder-gray-600" placeholder="KA-01-AA-1234">
+                    <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 ml-1">I am a</label>
+                    <div class="relative group">
+                        <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                            <i class="fas fa-user-tag text-yellow-500 transition-colors"></i>
                         </div>
+                        <select id="role" onchange="toggleFields()" class="w-full bg-gray-800 border border-gray-700 text-white rounded-xl pl-11 pr-4 py-4 appearance-none focus:outline-none focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 font-bold cursor-pointer transition-all hover:bg-gray-750">
+                            <option value="client">👤 Passenger (Rider)</option>
+                            <option value="driver">🛺 Captain (Auto Driver)</option>
+                        </select>
+                        <i class="fas fa-chevron-down absolute right-4 top-5 text-gray-500 pointer-events-none"></i>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 ml-1">Full Name</label>
+                        <input type="text" id="name" class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-4 focus:outline-none focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 text-white font-medium placeholder-gray-600 transition-all" placeholder="e.g. Rahul Dravid">
                     </div>
                     <div>
-                        <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 ml-1">Starting Zone ID (1-10)</label>
-                        <div class="relative">
-                            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><i class="fas fa-map-marker-alt text-gray-500"></i></div>
-                            <input type="number" id="zone" class="w-full bg-gray-800 border border-gray-700 rounded-xl pl-11 pr-4 py-4 focus:outline-none focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 text-white font-medium placeholder-gray-600" placeholder="e.g. 1" value="1">
+                        <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 ml-1">Mobile (Port)</label>
+                        <input type="number" id="port" class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-4 focus:outline-none focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 text-white font-medium placeholder-gray-600 transition-all" placeholder="e.g. 9001">
+                    </div>
+                </div>
+
+                <div id="driverFields">
+                    <div class="bg-yellow-500/10 border border-yellow-500/20 p-3 rounded-xl flex items-start gap-3 mb-4">
+                        <i class="fas fa-id-card text-yellow-500 mt-1"></i>
+                        <p class="text-xs text-yellow-200/90 leading-relaxed font-medium">Captain details are required for vehicle verification and zone assignment.</p>
+                    </div>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 ml-1">Vehicle Number</label>
+                            <div class="relative">
+                                <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><i class="fas fa-car text-gray-500"></i></div>
+                                <input type="text" id="vehicle" class="w-full bg-gray-800 border border-gray-700 rounded-xl pl-11 pr-4 py-4 focus:outline-none focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 text-white font-medium placeholder-gray-600" placeholder="KA-01-AA-1234">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 ml-1">Starting Zone ID (1-10)</label>
+                            <div class="relative">
+                                <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><i class="fas fa-map-marker-alt text-gray-500"></i></div>
+                                <input type="number" id="zone" class="w-full bg-gray-800 border border-gray-700 rounded-xl pl-11 pr-4 py-4 focus:outline-none focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 text-white font-medium placeholder-gray-600" placeholder="e.g. 1" value="1">
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <button onclick="registerUser()" class="w-full bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-400 hover:to-yellow-500 text-black font-extrabold py-4 rounded-xl shadow-lg shadow-yellow-500/20 transform hover:-translate-y-1 active:scale-95 transition-all duration-200 mt-6 text-lg flex items-center justify-center gap-2 group">
-                <span>Create Account</span>
-                <i class="fas fa-arrow-right group-hover:translate-x-1 transition-transform"></i>
-            </button>
+                <button onclick="registerUser()" class="w-full bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-400 hover:to-yellow-500 text-black font-extrabold py-4 rounded-xl shadow-lg shadow-yellow-500/20 transform hover:-translate-y-1 active:scale-95 transition-all duration-200 mt-6 text-lg flex items-center justify-center gap-2 group">
+                    <span>Create Account</span>
+                    <i class="fas fa-arrow-right group-hover:translate-x-1 transition-transform"></i>
+                </button>
 
-            <div class="text-center mt-6 pt-4 border-t border-gray-700/50">
-                <a href="/" class="text-sm text-gray-400 hover:text-white transition-colors font-medium flex items-center justify-center gap-2 group">
-                    <i class="fas fa-arrow-left text-xs group-hover:-translate-x-1 transition-transform"></i> Back to Login
-                </a>
+                <div class="text-center mt-6 pt-4 border-t border-gray-700/50">
+                    <a href="/" class="text-sm text-gray-400 hover:text-white transition-colors font-medium flex items-center justify-center gap-2 group">
+                        <i class="fas fa-arrow-left text-xs group-hover:-translate-x-1 transition-transform"></i> Back to Login
+                    </a>
+                </div>
             </div>
         </div>
     </div>
