@@ -208,7 +208,7 @@ async def driver_websocket(websocket: WebSocket, driver_id: int):
     except WebSocketDisconnect:
         manager.disconnect("driver", driver_id)
 
-@app.get("/config/locations")
+@app.get("/config/locations")   
 def get_locs(): return ZONE_MAP
 
 # 4. QUEUE SORTING WITH BLACKLIST FILTER
@@ -224,7 +224,7 @@ def get_q(driver_id: Optional[int] = None, db: Session=Depends(get_db)):
     q_data = []
     for r in waiting:
         price = calculate_price_for_driver(r.start_zone, r.drop_zone, False, bool(r.is_priority))
-        q_data.append({
+        q_data.append({ 
             "queue_position": r.id, 
             "client_id": r.client_id, 
             "from": get_location_name(r.start_zone), 
