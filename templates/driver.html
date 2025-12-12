@@ -2,133 +2,209 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Driver App</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Captain Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <style>#map { height: 350px; width: 100%; z-index: 0; }</style>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #111827; color: #f3f4f6; }
+        #map { height: 50vh; width: 100%; z-index: 0; background: #111827; }
+        .glass-panel { background: rgba(31, 41, 55, 0.95); backdrop-filter: blur(8px); border-top: 1px solid rgba(255,255,255,0.1); }
+        .new-card { animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { border-color: #eab308; } 50% { border-color: #facc15; } 100% { border-color: #eab308; } }
+    </style>
 </head>
-<body class="bg-gray-900 text-white min-h-screen">
-    <div class="max-w-md mx-auto p-4">
-        <div class="flex justify-between items-center mb-4">
-            <h1 class="text-xl font-bold text-yellow-400">🚖 Captain <span class="text-sm text-gray-400">#{{ id }}</span></h1>
-            <div class="flex items-center gap-2">
-                <button onclick="toggleHistory()" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded border border-gray-500">📜 History</button>
-                <div class="text-xs bg-green-600 px-2 py-1 rounded">Online</div>
+<body class="h-screen flex flex-col overflow-hidden">
+
+    <div class="p-4 bg-gray-900 border-b border-gray-800 flex justify-between items-center z-50">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full bg-yellow-500 flex items-center justify-center text-black font-bold">
+                <i class="fas fa-taxi"></i>
+            </div>
+            <div>
+                <h1 class="text-lg font-bold text-white leading-none" id="driver-name">Captain</h1>
+                <span class="text-xs text-gray-400" id="driver-vehicle">#{{ id }}</span>
             </div>
         </div>
+        <div class="px-3 py-1 bg-green-900/30 border border-green-800 text-green-400 text-xs font-bold rounded-full">
+            ● ONLINE
+        </div>
+    </div>
 
-        <div id="main-view">
-            <div id="map" class="rounded-xl border border-gray-700 mb-4 shadow-lg"></div>
+    <div class="relative w-full z-0 group">
+        <div id="map"></div>
+    </div>
 
-            <div id="active-panel" class="hidden bg-gray-800 p-4 rounded-xl border-l-4 border-yellow-500 mb-4 shadow-lg">
-                <h2 class="font-bold text-lg mb-2">🚀 Trip in Progress</h2>
-                <div class="space-y-2">
-                    <button onclick="updateStatus('driver_arrived')" class="w-full bg-yellow-600 hover:bg-yellow-500 py-3 rounded-lg font-bold shadow text-black">📍 Arrived at Pickup</button>
-                    <button onclick="updateStatus('start_trip')" class="w-full bg-blue-600 hover:bg-blue-500 py-3 rounded-lg font-bold shadow">▶️ Start Trip</button>
-                    <button onclick="updateStatus('complete_ride')" class="w-full bg-green-600 hover:bg-green-500 py-3 rounded-lg font-bold shadow">✅ Complete & Collect</button>
-                </div>
-            </div>
-
-            <h3 class="text-xs text-gray-500 font-bold uppercase mb-2">Requests</h3>
-            <div id="feed" class="space-y-2 mb-6"><div id="empty-msg" class="text-center text-gray-600 text-sm">Scanning...</div></div>
+    <div class="glass-panel flex-1 flex flex-col rounded-t-3xl -mt-6 z-30 shadow-2xl relative">
+        <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mt-3 mb-2 opacity-50"></div>
+        
+        <div id="feed-container" class="p-4 flex-1 overflow-y-auto">
+            <div id="feed" class="space-y-3"></div>
             
-            <div class="border-t border-gray-800 pt-4">
-                <h3 class="text-xs text-blue-400 font-bold uppercase mb-2">Pool Offers</h3>
-                <div id="pool-feed" class="space-y-2"></div>
+            <div class="mt-4 pt-4 border-t border-gray-700">
+                <h3 class="text-[10px] uppercase font-bold text-blue-400 mb-2">High Value Pools</h3>
+                <div id="pool-feed" class="space-y-2 text-center text-xs text-gray-500">Scanning...</div>
             </div>
         </div>
 
-        <div id="history-view" class="hidden">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="font-bold text-lg">My Trips</h2>
-                <button onclick="toggleHistory()" class="text-sm text-blue-400">Back</button>
+        <div id="active-panel" class="hidden absolute inset-0 bg-gray-900/98 z-50 p-6 flex flex-col justify-center text-center">
+            <div class="mb-6">
+                <i class="fas fa-route text-4xl text-green-500 mb-2 animate-bounce"></i>
+                <h2 class="text-2xl font-bold text-white">Trip Active</h2>
+                <p class="text-gray-400 text-sm">Follow GPS to destination</p>
             </div>
-            <div id="hist-list" class="space-y-2">Loading...</div>
+
+            <button id="btn-arrived" onclick="updateStatus('driver_arrived')" class="w-full bg-gray-800 hover:bg-gray-700 text-white py-4 rounded-xl font-bold border border-gray-600 mb-3">
+                📍 Arrived at Pickup
+            </button>
+            
+            <button id="btn-start" onclick="updateStatus('start_trip')" class="hidden w-full bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-xl font-bold mb-3">
+                ▶️ Start Trip
+            </button>
+            
+            <button id="btn-complete" onclick="updateStatus('complete_ride')" class="hidden w-full bg-green-600 hover:bg-green-500 text-white py-4 rounded-xl font-bold">
+                ✅ Complete & Collect
+            </button>
         </div>
     </div>
 
     <script>
         const driverId = {{ id }};
         const ws = new WebSocket(`ws://${window.location.host}/ws/driver/${driverId}`);
-        const map = L.map('map', {zoomControl:false}).setView([12.971, 77.594], 11);
+        const map = L.map('map', {zoomControl:false}).setView([12.971, 77.594], 12);
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
-        let routeLine = null;
 
-        const COORDS = { "Koramangala": [12.9352, 77.6245], "Indiranagar": [12.9719, 77.6412], "HSR Layout": [12.9121, 77.6446], "Electronic City": [12.8399, 77.6770], "Whitefield": [12.9698, 77.7500], "MG Road": [12.9716, 77.5946], "Jayanagar": [12.9308, 77.5838], "Marathahalli": [12.9591, 77.6974], "Hebbal": [13.0354, 77.5988], "Airport (KIAL)": [13.1986, 77.7066] };
+        // --- 1. FRONTEND IGNORE LIST (Instant UX) ---
+        const declinedRides = new Set(); 
 
-        function preview(from, to) {
-            if(routeLine) map.removeLayer(routeLine);
-            const p1=COORDS[from], p2=COORDS[to];
-            if(p1 && p2) { routeLine = L.polyline([p1, p2], {color:'#FBBF24', weight:5}).addTo(map); map.fitBounds(routeLine.getBounds(), {padding:[40,40]}); }
+        fetch(`/api/driver/${driverId}`).then(r=>r.json()).then(d => {
+            document.getElementById('driver-name').innerText = d.name;
+            document.getElementById('driver-vehicle').innerText = d.vehicle_number;
+        });
+
+        // 101 Location Logic
+        const REAL_COORDS = { 1:[12.9352,77.6245], 2:[12.9719,77.6412], 3:[12.9308,77.5838], 4:[12.9121,77.6446], 5:[12.9698,77.7500], 6:[12.9591,77.6974], 101:[12.9868,77.7383] };
+        function getSafeCoords(id) {
+            id = parseInt(id);
+            if (REAL_COORDS[id]) return REAL_COORDS[id];
+            const baseLat = 12.97, baseLng = 77.59;
+            const latOffset = ((id * 13) % 100) / 1000;
+            const lngOffset = ((id * 7) % 100) / 1000;
+            const dirLat = id % 2 === 0 ? 1 : -1;
+            const dirLng = id % 3 === 0 ? 1 : -1;
+            return [baseLat + (latOffset * dirLat * 5), baseLng + (lngOffset * dirLng * 5)];
+        }
+
+        // UNIFIED RENDERER
+        function renderCard(data) {
+            if(document.getElementById(`ride-${data.ride_id}`)) return;
+            if(declinedRides.has(data.ride_id)) return;
+
+            const card = document.createElement('div');
+            card.id = `ride-${data.ride_id}`;
+            card.className = `p-4 rounded-xl border ${data.is_vip ? 'bg-yellow-900/20 border-yellow-500 new-card' : 'bg-gray-800 border-gray-700'} mb-3`;
+            
+            card.innerHTML = `
+                <div class="flex justify-between items-start mb-3">
+                    <div>
+                        ${data.is_vip ? '<span class="bg-yellow-500 text-black text-[10px] font-bold px-2 py-0.5 rounded">⚡ VIP</span>' : ''}
+                        ${data.ride_type === 'pool' ? '<span class="bg-blue-500 text-white text-[10px] font-bold px-2 py-0.5 rounded">POOL</span>' : ''}
+                    </div>
+                    <div class="text-right">
+                        <div class="text-xl font-bold text-green-400">₹${data.price}</div>
+                        <div class="text-[10px] text-gray-500 uppercase">Payout</div>
+                    </div>
+                </div>
+                <div class="space-y-2 mb-4">
+                    <div class="text-sm font-bold text-white">🟢 ${data.from}</div>
+                    <div class="text-sm font-bold text-white">🔴 ${data.to}</div>
+                </div>
+                
+                <div class="flex gap-2">
+                    <button onclick="decline(${data.ride_id})" class="flex-1 py-3 rounded-lg font-bold text-gray-400 bg-gray-700 hover:bg-gray-600 border border-gray-600 transition-colors">
+                        Decline
+                    </button>
+                    <button onclick="accept(${data.ride_id})" class="flex-[2] py-3 rounded-lg font-bold text-black ${data.is_vip ? 'bg-yellow-500 hover:bg-yellow-400' : 'bg-white hover:bg-gray-200'}">
+                        ACCEPT
+                    </button>
+                </div>
+            `;
+            
+            if(data.is_vip) document.getElementById('feed').prepend(card);
+            else document.getElementById('feed').appendChild(card);
         }
 
         ws.onmessage = (e) => {
             const data = JSON.parse(e.data);
-            if(data.type === 'new_ride') {
-                document.getElementById('empty-msg').style.display='none';
-                const card = document.createElement('div');
-                card.className = `bg-gray-800 p-3 rounded-lg border-l-4 ${data.is_vip?'border-yellow-500':'border-blue-500'} mb-2`;
-                card.onmouseenter = () => preview(data.from, data.to);
-                card.innerHTML = `<div class="flex justify-between font-bold"><span>#${data.ride_id}</span>${data.is_vip?'<span class="text-xs bg-yellow-500 text-black px-1 rounded font-bold">VIP</span>':''}</div><div class="text-sm text-gray-300">${data.from} ➡ ${data.to}</div><button onclick="accept(${data.ride_id})" class="mt-2 w-full bg-white text-black font-bold py-1 rounded">Accept</button>`;
-                document.getElementById('feed').prepend(card);
-            }
-            if(data.type === 'pool_accepted') {
-                document.getElementById('feed').innerHTML = '';
-                document.getElementById('pool-feed').innerHTML = '';
-                document.getElementById('active-panel').classList.remove('hidden');
-                alert("Pool Accepted! Start driving.");
-            }
-            if(data.type === 'pool_taken') checkPools();
+            if(data.type === 'new_ride') renderCard(data);
         }
+
+        // POLLING LOOP (Updated to filter by driverId)
+        async function checkQueue() {
+            try {
+                // PASS DRIVER ID TO SERVER TO GET FILTERED LIST
+                const res = await fetch(`/rides/queue?driver_id=${driverId}`);
+                const data = await res.json();
+                
+                if (data.queue.length > 0) {
+                    data.queue.forEach(r => {
+                        renderCard({
+                            ride_id: r.client_id, from: r.from, to: r.to, 
+                            is_vip: r.vip, ride_type: r.vip ? 'solo' : 'pool', price: r.price
+                        });
+                    });
+                }
+                const pRes = await fetch('/pooling/offers');
+                const pData = await pRes.json();
+                const pFeed = document.getElementById('pool-feed');
+                if(pData.length > 0) {
+                    pFeed.innerHTML = pData.map(p => `
+                        <div class="bg-blue-900/20 border border-blue-600/50 p-3 rounded-lg flex justify-between items-center">
+                            <div class="text-left">
+                                <div class="text-blue-400 font-bold text-xs">POOL • ₹${p.value}</div>
+                                <div class="text-[10px] text-gray-400">${p.from} ➡ ${p.to}</div>
+                            </div>
+                            <button onclick="acceptPool(${p.id})" class="bg-blue-600 text-white text-xs px-3 py-1 rounded">JOIN</button>
+                        </div>`).join('');
+                }
+            } catch(e) {}
+        }
+        setInterval(checkQueue, 2000);
 
         function accept(id) {
             ws.send(JSON.stringify({ "action": "accept_ride", "ride_id": id }));
-            document.getElementById('feed').innerHTML = '';
+            document.getElementById('feed-container').classList.add('hidden');
             document.getElementById('active-panel').classList.remove('hidden');
         }
 
-        // --- THE FIXED BUTTON FUNCTION ---
-        function updateStatus(action) {
-            // We just send the action. Server knows which rides are active for us.
-            ws.send(JSON.stringify({ "action": action }));
-            
-            if(action === 'complete_ride') {
-                alert("Trip Completed!");
-                location.reload();
-            } else {
-                alert("Status sent to Passengers!");
+        function decline(id) {
+            const card = document.getElementById(`ride-${id}`);
+            if(card) {
+                declinedRides.add(id); // Local ignore
+                ws.send(JSON.stringify({ "action": "decline_ride", "ride_id": id })); // Backend ignore
+
+                card.style.transition = "all 0.3s ease";
+                card.style.opacity = "0";
+                card.style.transform = "translateX(-100%)";
+                setTimeout(() => card.remove(), 300);
             }
         }
 
-        async function checkPools() {
-            const res = await fetch('/pooling/offers');
-            const data = await res.json();
-            const feed = document.getElementById('pool-feed');
-            feed.innerHTML = '';
-            data.forEach(p => {
-                feed.innerHTML += `<div class="bg-blue-900/40 border border-blue-500 p-3 rounded mb-2"><div class="flex justify-between font-bold text-blue-300 text-sm"><span>Pool #${p.id}</span><span>₹${p.value}</span></div><div class="text-xs text-gray-400">${p.from} ➡ ${p.to}</div><button onclick="acceptPool(${p.id})" class="mt-2 w-full bg-blue-600 text-white text-xs font-bold py-2 rounded">ACCEPT POOL</button></div>`;
-            });
-        }
-        function acceptPool(id) { ws.send(JSON.stringify({ "action": "accept_pooled", "pooled_id": id })); }
-        
-        async function toggleHistory() {
-            const main = document.getElementById('main-view');
-            const hist = document.getElementById('history-view');
-            if(hist.classList.contains('hidden')) {
-                main.classList.add('hidden');
-                hist.classList.remove('hidden');
-                const res = await fetch(`/rides/history/driver/${driverId}`);
-                const data = await res.json();
-                const list = document.getElementById('hist-list');
-                list.innerHTML = data.length ? data.map(h => `<div class="bg-gray-800 p-3 rounded border border-gray-600 text-sm"><div class="flex justify-between text-gray-400"><span>${h.date}</span><span class="text-green-400 font-bold">₹${h.price}</span></div><div class="mt-1">${h.from} ➡ ${h.to}</div></div>`).join('') : '<div class="text-gray-500 text-center">No trips yet</div>';
-            } else {
-                main.classList.remove('hidden');
-                hist.classList.add('hidden');
+        function updateStatus(action) {
+            ws.send(JSON.stringify({ "action": action }));
+            if (action === 'driver_arrived') {
+                document.getElementById('btn-arrived').classList.add('hidden');
+                document.getElementById('btn-start').classList.remove('hidden');
+            } else if (action === 'start_trip') {
+                document.getElementById('btn-start').classList.add('hidden');
+                document.getElementById('btn-complete').classList.remove('hidden');
+            } else if (action === 'complete_ride') {
+                alert("Paid & Completed!"); location.reload();
             }
         }
-        
-        setInterval(checkPools, 2000);
+        function acceptPool(id) { ws.send(JSON.stringify({ "action": "accept_pooled", "pooled_id": id })); }
     </script>
 </body>
 </html>
