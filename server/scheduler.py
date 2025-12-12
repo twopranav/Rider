@@ -13,7 +13,7 @@ from server.database import SessionLocal
 from server import models
 
 LOG_LEVEL = logging.INFO
-SWEEP_INTERVAL_SECONDS = 30
+SWEEP_INTERVAL_SECONDS = 15 # Faster for demo
 LOOKAHEAD_MINUTES = 60
 
 logging.basicConfig(level=LOG_LEVEL, format="%(asctime)s %(levelname)s %(message)s")
@@ -38,7 +38,8 @@ def process_daily_subscriptions():
 
             scheduled_dt = datetime.combine(now.date(), b.time_of_day)
             
-            if now <= scheduled_dt <= lookahead_limit:
+            # Allow booking slightly in the past for immediate testing
+            if (now - timedelta(minutes=5)) <= scheduled_dt <= lookahead_limit:
                 exists = db.query(models.BookingRide).filter(models.BookingRide.booking_id == b.id, models.BookingRide.scheduled_for == scheduled_dt).first()
                 if not exists:
                     br = models.BookingRide(booking_id=b.id, scheduled_for=scheduled_dt, status=models.RideStatus.waiting)
@@ -60,6 +61,7 @@ def dispatch_priority_rides():
             if not booking: continue
 
             if booking.ride_mode != "pool":
+                # Instant Dispatch for Solo VIP
                 ride = models.Ride(client_id=booking.client_id, start_zone=booking.start_zone, drop_zone=booking.drop_zone, is_priority=1, status=models.RideStatus.waiting)
                 db.add(ride); br.status = models.RideStatus.assigned; br.ride_id = ride.id
                 logger.info(f"Auto-dispatch Solo VIP: User {booking.client_id}")
@@ -74,7 +76,8 @@ def dispatch_priority_rides():
             groups[key].append(br)
 
         for key, members in groups.items():
-            if len(members) >= 2:
+            # --- FIX: ALLOW 1 PERSON POOL FOR TESTING ---
+            if len(members) >= 1: 
                 booking_ids = [m.id for m in members]
                 offer = models.PoolOffer(booking_ride_ids=json.dumps(booking_ids), start_zone=key[0], drop_zone=key[1], scheduled_for=datetime.combine(datetime.now().date(), key[2]), status=models.PoolOfferStatus.open)
                 db.add(offer)
@@ -93,7 +96,7 @@ def start_scheduler():
     scheduler = AsyncIOScheduler(event_loop=loop)
     scheduler.add_job(frequent_job, 'interval', seconds=SWEEP_INTERVAL_SECONDS)
     scheduler.start()
-    logger.info(f"Scheduler Running (Local Time). Interval: {SWEEP_INTERVAL_SECONDS}s")
+    logger.info(f"Scheduler Running. Interval: {SWEEP_INTERVAL_SECONDS}s")
     try: loop.run_forever()
     except (KeyboardInterrupt, SystemExit): scheduler.shutdown()
 

@@ -2,39 +2,65 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Namma Yatri - Login</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rider - Login</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; }
+    </style>
 </head>
-<body class="bg-gray-900 text-white h-screen flex items-center justify-center">
+<body class="bg-gray-900 text-white min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
+    
+    <div class="absolute top-0 left-0 w-full h-full bg-[url('https://images.unsplash.com/photo-1565043666747-69f6646db940?q=80&w=1974&auto=format&fit=crop')] bg-cover bg-center opacity-30 blur-[2px] transform scale-105"></div>
 
-    <div class="bg-gray-800 p-8 rounded-2xl shadow-2xl w-96 border border-gray-700">
+    <div class="bg-gray-900/80 p-8 rounded-3xl shadow-2xl w-full max-w-md border border-gray-700/50 backdrop-blur-xl relative z-10 transition-all hover:border-yellow-500/30">
+        
         <div class="text-center mb-8">
-            <h1 class="text-4xl font-bold text-yellow-400 mb-2">🛺 Rider</h1>
-            <p class="text-gray-400">Bangalore's Smartest Mobility</p>
+            <div class="inline-flex items-center justify-center gap-3 mb-2">
+                <div class="w-12 h-12 bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-xl flex items-center justify-center shadow-lg shadow-yellow-500/20 transform -rotate-3">
+                    <i class="fas fa-taxi text-2xl text-black"></i>
+                </div>
+                <h1 class="text-4xl font-black text-white tracking-tighter italic">Rider</h1>
+            </div>
+            <p class="text-gray-400 text-sm font-medium">Bangalore's Smartest Mobility</p>
         </div>
 
-        <div class="space-y-4">
+        <div class="space-y-6">
             <div>
-                <label class="block text-sm font-medium text-gray-400 mb-1">Select Role</label>
-                <select id="role" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 focus:outline-none focus:border-yellow-400 text-white">
-                    <option value="rider">👤 Passenger (Rider)</option>
-                    <option value="driver">🚕 Captain (Driver)</option>
-                    <option value="admin">💻 Admin Dashboard</option>
-                </select>
+                <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 ml-1">Select Profile</label>
+                <div class="relative group">
+                    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <i class="fas fa-users-cog text-yellow-500 transition-colors"></i>
+                    </div>
+                    <select id="role" class="w-full bg-gray-800 border border-gray-700 text-white rounded-xl pl-11 pr-4 py-4 appearance-none focus:outline-none focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 font-bold cursor-pointer transition-all hover:bg-gray-750">
+                        <option value="rider">👤 Passenger (Rider)</option>
+                        <option value="driver">🚖 Captain (Driver)</option>
+                        <option value="admin">💻 Admin Dashboard</option>
+                    </select>
+                    <i class="fas fa-chevron-down absolute right-4 top-5 text-gray-500 pointer-events-none"></i>
+                </div>
             </div>
 
             <div>
-                <label class="block text-sm font-medium text-gray-400 mb-1">User ID</label>
-                <input type="number" id="user_id" value="1" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 focus:outline-none focus:border-yellow-400 text-white" placeholder="Enter ID">
+                <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 ml-1">User ID</label>
+                <div class="relative group">
+                    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <i class="fas fa-id-badge text-gray-500 group-focus-within:text-yellow-500 transition-colors"></i>
+                    </div>
+                    <input type="number" id="user_id" value="1" class="w-full bg-gray-800 border border-gray-700 rounded-xl pl-11 pr-4 py-4 focus:outline-none focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 text-white font-bold text-lg placeholder-gray-600 transition-all" placeholder="Enter ID">
+                </div>
             </div>
 
-            <button onclick="login()" class="w-full bg-yellow-500 hover:bg-yellow-600 text-black font-bold py-3 rounded-lg transition duration-200">
-                Login
+            <button onclick="login()" class="w-full bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-400 hover:to-yellow-500 text-black font-extrabold py-4 rounded-xl shadow-lg shadow-yellow-500/20 transform hover:-translate-y-1 active:scale-95 transition-all duration-200 mt-2 text-lg flex items-center justify-center gap-2">
+                Log In <i class="fas fa-arrow-right"></i>
             </button>
 
-            <div class="text-center mt-4">
-                <a href="/register" class="text-sm text-yellow-400 hover:underline">New here? Create Account</a>
+            <div class="text-center mt-6 pt-6 border-t border-gray-700/50">
+                <a href="/register" class="text-sm text-gray-400 hover:text-white transition-colors font-medium group flex items-center justify-center gap-2">
+                    Don't have an account? 
+                    <span class="text-yellow-500 font-bold group-hover:underline decoration-2 underline-offset-4">Create one</span>
+                </a>
             </div>
         </div>
     </div>
@@ -43,6 +69,13 @@
         function login() {
             const role = document.getElementById('role').value;
             const id = document.getElementById('user_id').value;
+            
+            if (!id) {
+                alert("Please enter a User ID");
+                return;
+            }
+            
+            // Redirect Logic
             if (role === 'admin') window.location.href = '/dashboard';
             else if (role === 'rider') window.location.href = `/app/rider/${id}`;
             else window.location.href = `/app/driver/${id}`;
