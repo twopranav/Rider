@@ -82,7 +82,7 @@ app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"]
 )
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# app.mount("/static", StaticFiles(directory="static"), name="static") # OPTIONAL: Unused
 templates = Jinja2Templates(directory="templates")
 manager = ConnectionManager()
 
@@ -271,7 +271,6 @@ async def driver_websocket(websocket: WebSocket, driver_id: int):
                     offer = db.query(models.PoolOffer).filter(models.PoolOffer.id == pool_id).first()
                     if offer and offer.status == models.PoolOfferStatus.open:
                         offer.status = models.PoolOfferStatus.filled
-                        # (omitted for brevity)
             finally:
                 db.close()
     except WebSocketDisconnect:
@@ -284,27 +283,31 @@ def get_locs(): return ZONE_MAP
 @app.get("/rides/queue")
 def get_q(driver_id: Optional[int] = None, db: Session=Depends(get_db)):
     waiting = db.query(models.Ride).filter(models.Ride.status == models.RideStatus.waiting)\
-        .order_by(models.Ride.is_priority.desc(), models.Ride.requested_at.asc()).all()
+        .order_by(models.Ride.requested_at.asc()).all()
     if driver_id:
         waiting = [r for r in waiting if driver_id not in DECLINED_RIDES[r.id]]
-    q_data = []
+    vip_data, norm_data = [], []
     for r in waiting:
         client = db.query(models.Client).filter(models.Client.id == r.client_id).first()
         client_name = client.name if client else "Unknown User"
         r_source = getattr(r, "source", "immediate")
         ui_class = "card-gold" if r_source in ["scheduled", "auto_feature", BookingSource.AUTO_FEATURE] else "card-normal"
         final_price = r.price if r.price else 0
-        q_data.append({ 
+        ride_obj = { 
             "queue_position": r.id, 
             "client_id": r.client_id, 
             "client_name": client_name,
             "from": get_location_name(r.start_zone), 
             "to": get_location_name(r.drop_zone), 
             "vip": bool(r.is_priority), 
-            "price": final_price,          # <--- CORRECT
+            "price": final_price,
             "ui_class": ui_class
-        })
-    return {"queue": q_data, "active": [], "drivers": []}
+        }
+        if r.is_priority:
+            vip_data.append(ride_obj)
+        else:
+            norm_data.append(ride_obj)
+    return {"vip": vip_data, "standard": norm_data, "active": [], "drivers": []}
 
 @app.get("/pooling/offers")
 def list_pools(db: Session=Depends(get_db)):
